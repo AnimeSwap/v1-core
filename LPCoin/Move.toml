@@ -1,0 +1,10 @@
+[package]
+name = "LPCoin"
+version = "0.3.0"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework/", rev = "devnet" }
+
+[addresses]
+ResourceAccountDeployer = "0xe73ee18380b91e37906a728540d2c8ac7848231a26b99ee5631351b3543d7cf2"
+
