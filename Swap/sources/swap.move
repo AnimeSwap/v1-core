@@ -1743,8 +1743,9 @@ module SwapDeployer::AnimeSwapPoolV1 {
     }
 
     // borrow on boin and repay the other coin, greater than swap fee
+    // borrow BTC and repay USDT
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
-    public entry fun test_flash_swap(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
+    public entry fun test_flash_swap_a(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
             acquires LiquidityPool, AdminData, PairInfo, Events {
         // init
         test_init(creator, resource_account, someone_else);
@@ -1753,17 +1754,49 @@ module SwapDeployer::AnimeSwapPoolV1 {
         TestCoinsV1::mint_coin<BTC>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
         TestCoinsV1::mint_coin<USDT>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
 
-        // if swap 1000 coin, should be 9000/11115 remain
-        add_liquidity_entry<BTC, USDT>(someone_else, 10000, 10000, 1, 1, DEADLINE);
-        let (coin_out_1, coin_out_2, flash_swap) = flash_swap<BTC, USDT>(1000, 0);
+        // if swap 1000 coin, should be 10000-1000/100000+11145 remain
+        add_liquidity_entry<BTC, USDT>(someone_else, 10000, 100000, 1, 1, DEADLINE);
+        let amount_out = 1000;
+        let amount_in = get_amounts_in_1_pair<USDT, BTC>(amount_out);
+        assert!(amount_in == 11145, TEST_ERROR);
+        let (coin_out_1, coin_out_2, flash_swap) = flash_swap<BTC, USDT>(amount_out, 0);
         coin::deposit<BTC>(signer::address_of(another_one), coin_out_1);
         coin::deposit<USDT>(signer::address_of(another_one), coin_out_2);
-        let repay_coin = coin::withdraw<USDT>(another_one, 1115);
+        let repay_coin = coin::withdraw<USDT>(another_one, amount_in);
         pay_flash_swap<BTC, USDT>(another_one, coin::zero<BTC>(), repay_coin, flash_swap);
         {
             let lp = borrow_global<LiquidityPool<BTC, USDT, LPCoin<BTC, USDT>>>(RESOURCE_ACCOUNT_ADDRESS);
-            assert!(coin::value(&lp.coin_x_reserve) == 9000, CONTRACTOR_BALANCE_ERROR);
-            assert!(coin::value(&lp.coin_y_reserve) == 11115, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::value(&lp.coin_x_reserve) == 10000 - 1000, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::value(&lp.coin_y_reserve) == 100000 + 11145, CONTRACTOR_BALANCE_ERROR);
+        };
+    }
+
+    // borrow on boin and repay the other coin, greater than swap fee
+    // borrow USDT and repay BTC
+    #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
+    public entry fun test_flash_swap_b(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
+            acquires LiquidityPool, AdminData, PairInfo, Events {
+        // init
+        test_init(creator, resource_account, someone_else);
+        create_account_for_test(signer::address_of(another_one));
+        TestCoinsV1::register_coins_all(another_one);
+        TestCoinsV1::mint_coin<BTC>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
+        TestCoinsV1::mint_coin<USDT>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
+
+        // if swap 1000 coin, should be 10000+102/100000-1000 remain
+        add_liquidity_entry<BTC, USDT>(someone_else, 10000, 100000, 1, 1, DEADLINE);
+        let amount_out = 1000;
+        let amount_in = get_amounts_in_1_pair<BTC, USDT>(amount_out);
+        assert!(amount_in == 102, TEST_ERROR);
+        let (coin_out_1, coin_out_2, flash_swap) = flash_swap<BTC, USDT>(0, amount_out);
+        coin::deposit<BTC>(signer::address_of(another_one), coin_out_1);
+        coin::deposit<USDT>(signer::address_of(another_one), coin_out_2);
+        let repay_coin = coin::withdraw<BTC>(another_one, amount_in);
+        pay_flash_swap<BTC, USDT>(another_one, repay_coin, coin::zero<USDT>(), flash_swap);
+        {
+            let lp = borrow_global<LiquidityPool<BTC, USDT, LPCoin<BTC, USDT>>>(RESOURCE_ACCOUNT_ADDRESS);
+            assert!(coin::value(&lp.coin_x_reserve) == 10000 + 102, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::value(&lp.coin_y_reserve) == 100000 - 1000, CONTRACTOR_BALANCE_ERROR);
         };
     }
 
