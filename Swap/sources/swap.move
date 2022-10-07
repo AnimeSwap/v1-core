@@ -969,12 +969,12 @@ module SwapDeployer::AnimeSwapPoolV1 {
         // get reserve
         let lp = borrow_global_mut<LiquidityPool<CoinType1, CoinType2, LPCoin<CoinType1, CoinType2>>>(RESOURCE_ACCOUNT_ADDRESS);
         let (reserve_x, reserve_y) = (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve));
-        coin::merge(&mut lp.coin_x_reserve, coin_x);
-        coin::merge(&mut lp.coin_y_reserve, coin_y);
-        let (balance_x, balance_y) = (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve));
         let admin_data = borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
         // feeOn
         let fee_on = mint_fee_interval<CoinType1, CoinType2>(lp, admin_data);
+        coin::merge(&mut lp.coin_x_reserve, coin_x);
+        coin::merge(&mut lp.coin_y_reserve, coin_y);
+        let (balance_x, balance_y) = (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve));
 
         let total_supply = AnimeSwapPoolV1Library::get_lpcoin_total_supply<CoinType1, CoinType2>();
         let liquidity;
