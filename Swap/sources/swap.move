@@ -529,11 +529,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         // swap
         let coins_in = coin::withdraw<CoinType1>(account, amount_in);
         let coins_out;
-        if (AnimeSwapPoolV1Library::compare<CoinType1, CoinType2>()) {
-            coins_out = swap_coins_for_coins_1<CoinType1, CoinType2>(account, coins_in, deadline);
-        } else {
-            coins_out = swap_coins_for_coins_2<CoinType2, CoinType1>(account, coins_in, deadline);
-        };
+        coins_out = swap_coins_for_coins<CoinType1, CoinType2>(account, coins_in, deadline);
         coin::deposit<CoinType2>(to, coins_out);
     }
 
@@ -556,16 +552,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
         let coins_in = coin::withdraw<CoinType1>(account, amount_in);
         let coins_out;
         let coins_mid;
-        if (AnimeSwapPoolV1Library::compare<CoinType1, CoinType2>()) {
-            coins_mid = swap_coins_for_coins_1<CoinType1, CoinType2>(account, coins_in, deadline);
-        } else {
-            coins_mid = swap_coins_for_coins_2<CoinType2, CoinType1>(account, coins_in, deadline);
-        };
-        if (AnimeSwapPoolV1Library::compare<CoinType2, CoinType3>()) {
-            coins_out = swap_coins_for_coins_1<CoinType2, CoinType3>(account, coins_mid, deadline);
-        } else {
-            coins_out = swap_coins_for_coins_2<CoinType3, CoinType2>(account, coins_mid, deadline);
-        };
+        coins_mid = swap_coins_for_coins<CoinType1, CoinType2>(account, coins_in, deadline);
+        coins_out = swap_coins_for_coins<CoinType2, CoinType3>(account, coins_mid, deadline);
         coin::deposit<CoinType3>(to, coins_out);
     }
 
@@ -589,21 +577,9 @@ module SwapDeployer::AnimeSwapPoolV1 {
         let coins_out;
         let coins_mid;
         let coins_mid_2;
-        if (AnimeSwapPoolV1Library::compare<CoinType1, CoinType2>()) {
-            coins_mid = swap_coins_for_coins_1<CoinType1, CoinType2>(account, coins_in, deadline);
-        } else {
-            coins_mid = swap_coins_for_coins_2<CoinType2, CoinType1>(account, coins_in, deadline);
-        };
-        if (AnimeSwapPoolV1Library::compare<CoinType2, CoinType3>()) {
-            coins_mid_2 = swap_coins_for_coins_1<CoinType2, CoinType3>(account, coins_mid, deadline);
-        } else {
-            coins_mid_2 = swap_coins_for_coins_2<CoinType3, CoinType2>(account, coins_mid, deadline);
-        };
-        if (AnimeSwapPoolV1Library::compare<CoinType3, CoinType4>()) {
-            coins_out = swap_coins_for_coins_1<CoinType3, CoinType4>(account, coins_mid_2, deadline);
-        } else {
-            coins_out = swap_coins_for_coins_2<CoinType4, CoinType3>(account, coins_mid_2, deadline);
-        };
+        coins_mid = swap_coins_for_coins<CoinType1, CoinType2>(account, coins_in, deadline);
+        coins_mid_2 = swap_coins_for_coins<CoinType2, CoinType3>(account, coins_mid, deadline);
+        coins_out = swap_coins_for_coins<CoinType3, CoinType4>(account, coins_mid_2, deadline);
         coin::deposit<CoinType4>(to, coins_out);
     }
 
@@ -625,11 +601,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         };
         let coins_in = coin::withdraw<CoinType1>(account, amount_in);
         let coins_out;
-        if (AnimeSwapPoolV1Library::compare<CoinType1, CoinType2>()) {
-            coins_out = swap_coins_for_coins_1<CoinType1, CoinType2>(account, coins_in, deadline);
-        } else {
-            coins_out = swap_coins_for_coins_2<CoinType2, CoinType1>(account, coins_in, deadline);
-        };
+        coins_out = swap_coins_for_coins<CoinType1, CoinType2>(account, coins_in, deadline);
         coin::deposit<CoinType2>(to, coins_out);
     }
 
@@ -653,16 +625,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
         let coins_in = coin::withdraw<CoinType1>(account, amount_in);
         let coins_out;
         let coins_mid;
-        if (AnimeSwapPoolV1Library::compare<CoinType1, CoinType2>()) {
-            coins_mid = swap_coins_for_coins_1<CoinType1, CoinType2>(account, coins_in, deadline);
-        } else {
-            coins_mid = swap_coins_for_coins_2<CoinType2, CoinType1>(account, coins_in, deadline);
-        };
-        if (AnimeSwapPoolV1Library::compare<CoinType2, CoinType3>()) {
-            coins_out = swap_coins_for_coins_1<CoinType2, CoinType3>(account, coins_mid, deadline);
-        } else {
-            coins_out = swap_coins_for_coins_2<CoinType3, CoinType2>(account, coins_mid, deadline);
-        };
+        coins_mid = swap_coins_for_coins<CoinType1, CoinType2>(account, coins_in, deadline);
+        coins_out = swap_coins_for_coins<CoinType2, CoinType3>(account, coins_mid, deadline);
         coin::deposit<CoinType3>(to, coins_out);
     }
 
@@ -687,21 +651,9 @@ module SwapDeployer::AnimeSwapPoolV1 {
         let coins_out;
         let coins_mid;
         let coins_mid_2;
-        if (AnimeSwapPoolV1Library::compare<CoinType1, CoinType2>()) {
-            coins_mid = swap_coins_for_coins_1<CoinType1, CoinType2>(account, coins_in, deadline);
-        } else {
-            coins_mid = swap_coins_for_coins_2<CoinType2, CoinType1>(account, coins_in, deadline);
-        };
-        if (AnimeSwapPoolV1Library::compare<CoinType2, CoinType3>()) {
-            coins_mid_2 = swap_coins_for_coins_1<CoinType2, CoinType3>(account, coins_mid, deadline);
-        } else {
-            coins_mid_2 = swap_coins_for_coins_2<CoinType3, CoinType2>(account, coins_mid, deadline);
-        };
-        if (AnimeSwapPoolV1Library::compare<CoinType3, CoinType4>()) {
-            coins_out = swap_coins_for_coins_1<CoinType3, CoinType4>(account, coins_mid_2, deadline);
-        } else {
-            coins_out = swap_coins_for_coins_2<CoinType4, CoinType3>(account, coins_mid_2, deadline);
-        };
+        coins_mid = swap_coins_for_coins<CoinType1, CoinType2>(account, coins_in, deadline);
+        coins_mid_2 = swap_coins_for_coins<CoinType2, CoinType3>(account, coins_mid, deadline);
+        coins_out = swap_coins_for_coins<CoinType3, CoinType4>(account, coins_mid_2, deadline);
         coin::deposit<CoinType4>(to, coins_out);
     }
 
@@ -815,6 +767,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
 
     /**
      *  remore liquidity
+     *  assert CoinType1 < CoinType2
      */
     fun remove_liquidity<CoinType1, CoinType2>(
         account: &signer,
@@ -837,6 +790,45 @@ module SwapDeployer::AnimeSwapPoolV1 {
 
     /**
      *  swap
+     *  swap from CoinType1 to CoinType2
+     *  no require for cmp(CoinType1, CoinType2)
+     */
+    public fun swap_coins_for_coins<CoinType1, CoinType2>(
+        account: &signer,
+        coins_in: Coin<CoinType1>,
+        deadline: u64
+    ): Coin<CoinType2> acquires LiquidityPool, AdminData, Events {
+        // check deadline first
+        let now = timestamp::now_seconds();
+        assert!(now <= deadline, TIME_EXPIRED);
+        let amount_in = coin::value(&coins_in);
+        let swap_fee = borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).swap_fee;
+        let (reserve_in, reserve_out) =
+            if (AnimeSwapPoolV1Library::compare<CoinType1, CoinType2>()) {
+                let lp = borrow_global<LiquidityPool<CoinType1, CoinType2, LPCoin<CoinType1, CoinType2>>>(RESOURCE_ACCOUNT_ADDRESS);
+                (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve))
+            } else {
+                let lp = borrow_global<LiquidityPool<CoinType2, CoinType1, LPCoin<CoinType2, CoinType1>>>(RESOURCE_ACCOUNT_ADDRESS);
+                (coin::value(&lp.coin_y_reserve), coin::value(&lp.coin_x_reserve))
+            };
+        let amount_out = AnimeSwapPoolV1Library::get_amount_out(amount_in, reserve_in, reserve_out, swap_fee);
+        if (AnimeSwapPoolV1Library::compare<CoinType1, CoinType2>()) {
+            let amount_x_in = amount_in;
+            let amount_y_in = 0;
+            let amount_x_out = 0;
+            let amount_y_out = amount_out;
+            swap_internal_1<CoinType1, CoinType2>(account, amount_x_in, amount_y_in, amount_x_out, amount_y_out, coins_in)
+        } else {
+            let amount_x_in = 0;
+            let amount_y_in = amount_in;
+            let amount_x_out = amount_out;
+            let amount_y_out = 0;
+            swap_internal_2<CoinType2, CoinType1>(account, amount_x_in, amount_y_in, amount_x_out, amount_y_out, coins_in)
+        }
+    }
+
+    /**
+     *  @deprecated swap
      *  assert CoinType1 < CoinType2
      *  swap from CoinType1 to CoinType2
      */
@@ -862,7 +854,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     }
 
     /**
-     *  swap
+     *  @deprecated swap
      *  assert CoinType1 < CoinType2
      *  swap from CoinType2 to CoinType1
      */
@@ -1076,6 +1068,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
         pair_info.pair_list
     }
 
+    /**
+     *  flash swap
+     *  assert CoinType1 < CoinType2
+     */
     public fun flash_swap<CoinType1, CoinType2>(
         loan_coin_1: u64,
         loan_coin_2: u64
