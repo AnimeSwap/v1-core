@@ -14,6 +14,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     use uq64x64::uq64x64;
     // use std::debug;    // For debug
 
+    /// pool data
     struct LiquidityPool<phantom CoinType1, phantom CoinType2, phantom LPCoin> has key {
         coin_x_reserve: Coin<CoinType1>,
         coin_y_reserve: Coin<CoinType2>,
@@ -27,7 +28,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         locked: bool,
     }
 
-    // resource_account has this resource as admin_data
+    /// global config data
     struct AdminData has key, drop {
         signer_cap: SignerCapability,
         dao_fee_to: address,
@@ -44,7 +45,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         lp_coin: TypeInfo,
     }
 
-    // resource_account has this resource for pair list
+    /// pair list
     struct PairInfo has key {
         pair_list: vector<PairMeta>,
     }
@@ -96,7 +97,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         repay_coin_2: u64,
     }
 
-    // no copy, no drop
+    /// no copy, no drop
     struct FlashSwap<phantom CoinType1, phantom CoinType2> {
         loan_coin_1: u64,
         loan_coin_2: u64
@@ -105,24 +106,43 @@ module SwapDeployer::AnimeSwapPoolV1 {
     const MINIMUM_LIQUIDITY: u64 = 1000;
     const MAX_U64: u64 = 18446744073709551615u64;
 
+    /// When time exceed the deadline
     const TIME_EXPIRED: u64 = 101;
+    /// When contract error
     const INTERNAL_ERROR: u64 = 102;
+    /// When user is not admin
     const FORBIDDEN: u64 = 103;
+    /// When not enough amount for pool
     const INSUFFICIENT_AMOUNT: u64 = 104;
+    /// When not enough liqudity amount
     const INSUFFICIENT_LIQUIDITY: u64 = 105;
+    /// When not enough liqudity minted
     const INSUFFICIENT_LIQUIDITY_MINT: u64 = 106;
+    /// When not enough liqudity burned
     const INSUFFICIENT_LIQUIDITY_BURN: u64 = 107;
+    /// When not enough CoinType1 amount
     const INSUFFICIENT_X_AMOUNT: u64 = 108;
+    /// When not enough CoinType2 amount
     const INSUFFICIENT_Y_AMOUNT: u64 = 109;
+    /// When not enough input amount
     const INSUFFICIENT_INPUT_AMOUNT: u64 = 110;
+    /// When not enough output amount
     const INSUFFICIENT_OUTPUT_AMOUNT: u64 = 111;
+    /// When contract K error
     const K_ERROR: u64 = 112;
+    /// When `to` address not resigeter output coin
     const TO_ADDRESS_NOT_REGISTER_COIN_ERROR: u64 = 114;
+    /// When already exists on account
     const PAIR_ALREADY_EXIST: u64 = 115;
+    /// When not exists on account
     const PAIR_NOT_EXIST: u64 = 116;
+    /// When error loan amount
     const LOAN_ERROR: u64 = 117;
+    /// When contract is not reentrant
     const LOCK_ERROR: u64 = 118;
+    /// When pair has wrong ordering
     const PAIR_ORDER_ERROR: u64 = 119;
+    /// When contract is paused
     const PAUSABLE_ERROR: u64 = 120;
 
     const DEPLOYER_ADDRESS: address = @SwapDeployer;
@@ -148,7 +168,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         });
     }
 
-    // multiple pairs
+    /// get amounts out, 1 pair
     public fun get_amounts_out_1_pair<CoinType1, CoinType2>(
         amount_in: u64
     ): u64 acquires LiquidityPool, AdminData {
@@ -165,7 +185,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_out
     }
 
-    // multiple pairs
+    /// get amounts out, 2 pairs
     public fun get_amounts_out_2_pair<CoinType1, CoinType2, CoinType3>(
         amount_in: u64
     ): u64 acquires LiquidityPool, AdminData {
@@ -190,7 +210,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_out
     }
 
-    // multiple pairs
+    /// get amounts out, 3 pairs
     public fun get_amounts_out_3_pair<CoinType1, CoinType2, CoinType3, CoinType4>(
         amount_in: u64
     ): u64 acquires LiquidityPool, AdminData {
@@ -223,7 +243,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_out
     }
 
-    // multiple pairs
+    /// get amounts in, 1 pair
     public fun get_amounts_in_1_pair<CoinType1, CoinType2>(
         amount_out: u64
     ): u64 acquires LiquidityPool, AdminData {
@@ -240,7 +260,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_in
     }
 
-    // multiple pairs
+    /// get amounts in, 2 pairs
     public fun get_amounts_in_2_pair<CoinType1, CoinType2, CoinType3>(
         amount_out: u64
     ): u64 acquires LiquidityPool, AdminData {
@@ -265,7 +285,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_in
     }
 
-    // multiple pairs
+    /// get amounts in, 3 pairs
     public fun get_amounts_in_3_pair<CoinType1, CoinType2, CoinType3, CoinType4>(
         amount_out: u64
     ): u64 acquires LiquidityPool, AdminData {
@@ -298,7 +318,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_in
     }
 
-    // get pair meta with `CoinType1`, `CoinType2`
+    /// get pair meta with `CoinType1`, `CoinType2`
     public fun get_pair_meta<CoinType1, CoinType2>(): PairMeta {
         let coin_x_type_info = type_info::type_of<CoinType1>();
         let coin_y_type_info = type_info::type_of<CoinType2>();
@@ -310,28 +330,30 @@ module SwapDeployer::AnimeSwapPoolV1 {
         }
     }
 
-    // require lp unlocked
+    /// require lp unlocked
     fun assert_lp_unlocked<CoinType1, CoinType2>() acquires LiquidityPool {
         assert!(exists<LiquidityPool<CoinType1, CoinType2, LPCoin<CoinType1, CoinType2>>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_NOT_EXIST);
         let lp = borrow_global<LiquidityPool<CoinType1, CoinType2, LPCoin<CoinType1, CoinType2>>>(RESOURCE_ACCOUNT_ADDRESS);
         assert!(lp.locked == false, LOCK_ERROR);
     }
 
+    /// require flash swap paused
     fun when_paused() acquires AdminData {
         assert!(borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause_flash == true, PAUSABLE_ERROR);
     }
 
+    /// require flash swap not paused
     fun when_not_paused() acquires AdminData {
         assert!(borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause_flash == false, PAUSABLE_ERROR);
     }
 
-    // return pair admin account signer
+    /// return pair admin account signer
     fun get_resource_account_signer(): signer acquires AdminData {
         let signer_cap = &borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).signer_cap;
         account::create_signer_with_capability(signer_cap)
     }
 
-    // create account & register coin
+    /// create pair, and register events
     fun create_pair<CoinType1, CoinType2>(account: &signer) acquires AdminData, PairInfo {
         // check lp not exist
         assert!(!exists<LiquidityPool<CoinType1, CoinType2, LPCoin<CoinType1, CoinType2>>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_ALREADY_EXIST);
@@ -474,7 +496,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
      * entry functions
      */
 
-    // add liquidity. if pair not exist, create pair first
+    /// Add liquidity. If pair not exist, create pair first
+    /// No require for pair order sorting
     public entry fun add_liquidity_entry<CoinType1, CoinType2>(
         account: &signer,
         amount_x_desired: u64,
@@ -496,7 +519,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
         }
     }
 
-    // remove liquidity
+    /// Remove liquidity
+    /// No require for pair order sorting
     public entry fun remove_liquidity_entry<CoinType1, CoinType2>(
         account: &signer,
         liquidity: u64,
@@ -511,7 +535,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         }
     }
 
-    // 1 pair swap CoinType1->CoinType2
+    /// 1 pair swap CoinType1->CoinType2
     public entry fun swap_exact_coins_for_coins_entry<CoinType1, CoinType2>(
         account: &signer,
         amount_in: u64,
@@ -533,7 +557,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin::deposit<CoinType2>(to, coins_out);
     }
 
-    // 2 pairs swap CoinType1->CoinType2->CoinType3
+    /// 2 pairs swap CoinType1->CoinType2->CoinType3
     public entry fun swap_exact_coins_for_coins_2_pair_entry<CoinType1, CoinType2, CoinType3>(
         account: &signer,
         amount_in: u64,
@@ -557,7 +581,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin::deposit<CoinType3>(to, coins_out);
     }
 
-    // 3 pairs swap CoinType1->CoinType2->CoinType3->CoinType4
+    /// 3 pairs swap CoinType1->CoinType2->CoinType3->CoinType4
     public entry fun swap_exact_coins_for_coins_3_pair_entry<CoinType1, CoinType2, CoinType3, CoinType4>(
         account: &signer,
         amount_in: u64,
@@ -583,7 +607,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin::deposit<CoinType4>(to, coins_out);
     }
 
-    // 1 pair swap CoinType1->CoinType2
+    /// 1 pair swap CoinType1->CoinType2
     public entry fun swap_coins_for_exact_coins_entry<CoinType1, CoinType2>(
         account: &signer,
         amount_out: u64,
@@ -605,7 +629,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin::deposit<CoinType2>(to, coins_out);
     }
 
-    // 2 pairs swap CoinType1->CoinType2->CoinType3
+    /// 2 pairs swap CoinType1->CoinType2->CoinType3
     public entry fun swap_coins_for_exact_coins_2_pair_entry<CoinType1, CoinType2, CoinType3>(
         account: &signer,
         amount_out: u64,
@@ -630,7 +654,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin::deposit<CoinType3>(to, coins_out);
     }
 
-    // 3 pairs swap CoinType1->CoinType2->CoinType3->CoinType4
+    /// 3 pairs swap CoinType1->CoinType2->CoinType3->CoinType4
     public entry fun swap_coins_for_exact_coins_3_pair_entry<CoinType1, CoinType2, CoinType3, CoinType4>(
         account: &signer,
         amount_out: u64,
@@ -767,7 +791,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
 
     /**
      *  remore liquidity
-     *  assert CoinType1 < CoinType2
+     *  require CoinType1 < CoinType2
      */
     fun remove_liquidity<CoinType1, CoinType2>(
         account: &signer,
@@ -788,11 +812,9 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin::deposit(signer::address_of(account), y_out);
     }
 
-    /**
-     *  swap
-     *  swap from CoinType1 to CoinType2
-     *  no require for cmp(CoinType1, CoinType2)
-     */
+    /// Swap CoinType1 to CoinType2
+    /// swap from CoinType1 to CoinType2
+    /// no quire for pair order sorting
     public fun swap_coins_for_coins<CoinType1, CoinType2>(
         account: &signer,
         coins_in: Coin<CoinType1>,
@@ -879,7 +901,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coins_out
     }
 
-    // update cumulative, coin_reserve, block_timestamp
+    /// update cumulative, coin_reserve, block_timestamp
     fun update_internal<CoinType1, CoinType2>(
         lp: &mut LiquidityPool<CoinType1, CoinType2, LPCoin<CoinType1, CoinType2>>,
         balance_x: u64, // new reserve value
@@ -936,7 +958,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         fee_on
     }
 
-    // mint coin with MintCapability
+    /// mint coin with MintCapability
     fun mint_coin<CoinType1, CoinType2>(
         account: &signer,
         amount: u64,
@@ -1034,7 +1056,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
      *  public functions for other contract
      */
 
-    // price oracle for other contract
+    /// price oracle for other contract
     public fun get_last_price_cumulative<CoinType1, CoinType2>(): (u128, u128) acquires LiquidityPool {
         if (!AnimeSwapPoolV1Library::compare<CoinType1, CoinType2>()) {
             return get_last_price_cumulative<CoinType2, CoinType1>()
@@ -1068,10 +1090,12 @@ module SwapDeployer::AnimeSwapPoolV1 {
         pair_info.pair_list
     }
 
-    /**
-     *  flash swap
-     *  assert CoinType1 < CoinType2
-     */
+    /// Get flash swap coins. User can loan any coins, and repay in the same tx.
+    /// In most cases, user may loan one coin, and repay the same or the other coin.
+    /// require CoinType1 < CoinType2.
+    /// * `loan_coin_1` - expected amount of CoinType1 coins to loan.
+    /// * `loan_coin_2` - expected amount of CoinType2 coins to loan.
+    /// Returns both loaned CoinType1 and CoinType2 coins: `(Coin<CoinType1>, Coin<CoinType2>, Flashloan<CoinType1, CoinType2)`.
     public fun flash_swap<CoinType1, CoinType2>(
         loan_coin_1: u64,
         loan_coin_2: u64
@@ -1093,6 +1117,14 @@ module SwapDeployer::AnimeSwapPoolV1 {
         (loaned_coin_1, loaned_coin_2, FlashSwap<CoinType1, CoinType2> {loan_coin_1, loan_coin_2})
     }
 
+    /// Repay flash swap coins.
+    /// User should repay amount, following the conditions:
+    /// `new_pool_1_value * new_pool_2_value >= old_pool_1_value * old_pool_2_value`
+    /// where `new_pool_x_value` is the `old_pool_x_value - amount_out + amount_in * (1 - swapFee)`,
+    /// and `pool_x_value` is the reserve amount for a given CoinType.
+    /// * `x_in` - CoinType1 coins to pay.
+    /// * `y_in` - CoinType2 coins to pay.
+    /// * `flash_swap` - flash_swap return.
     public fun pay_flash_swap<CoinType1, CoinType2>(
         account: &signer,
         x_in: Coin<CoinType1>,
