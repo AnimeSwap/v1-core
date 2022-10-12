@@ -88,16 +88,16 @@ module SwapDeployer::AnimeSwapPoolV1 {
     }
 
     struct FlashSwapEvent<phantom X, phantom Y> has drop, store {
-        loan_coin_1: u64,
-        loan_coin_2: u64,
-        repay_coin_1: u64,
-        repay_coin_2: u64,
+        loan_coin_x: u64,
+        loan_coin_y: u64,
+        repay_coin_x: u64,
+        repay_coin_y: u64,
     }
 
     /// no copy, no drop
     struct FlashSwap<phantom X, phantom Y> {
-        loan_coin_1: u64,
-        loan_coin_2: u64
+        loan_coin_x: u64,
+        loan_coin_y: u64
     }
 
     const MINIMUM_LIQUIDITY: u64 = 1000;
@@ -838,26 +838,31 @@ module SwapDeployer::AnimeSwapPoolV1 {
 
     /// price oracle for other contract
     public fun get_last_price_cumulative<X, Y>(): (u128, u128) acquires LiquidityPool {
-        if (!AnimeSwapPoolV1Library::compare<X, Y>()) {
-            return get_last_price_cumulative<Y, X>()
-        };
-        let lp = borrow_global<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
-        (lp.last_price_x_cumulative, lp.last_price_y_cumulative)
+        if (AnimeSwapPoolV1Library::compare<X, Y>()) {
+            let lp = borrow_global<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
+            (lp.last_price_x_cumulative, lp.last_price_y_cumulative)
+        } else {
+            let lp = borrow_global<LiquidityPool<Y, X>>(RESOURCE_ACCOUNT_ADDRESS);
+            (lp.last_price_y_cumulative, lp.last_price_x_cumulative)
+        }
     }
 
     public fun get_reserves<X, Y>(): (u64, u64, u64) acquires LiquidityPool {
-        if (!AnimeSwapPoolV1Library::compare<X, Y>()) {
-            return get_reserves<Y, X>()
-        };
-        let lp = borrow_global<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
-        (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve), lp.last_block_timestamp)
+        if (AnimeSwapPoolV1Library::compare<X, Y>()) {
+            let lp = borrow_global<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
+            (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve), lp.last_block_timestamp)
+        } else {
+            let lp = borrow_global<LiquidityPool<Y, X>>(RESOURCE_ACCOUNT_ADDRESS);
+            (coin::value(&lp.coin_y_reserve), coin::value(&lp.coin_x_reserve), lp.last_block_timestamp)
+        }
     }
 
     public fun check_pair_exist<X, Y>(): bool {
-        if (!AnimeSwapPoolV1Library::compare<X, Y>()) {
-            return check_pair_exist<Y, X>()
-        };
-        exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS)
+        if (AnimeSwapPoolV1Library::compare<X, Y>()) {
+            exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS)
+        } else {
+            exists<LiquidityPool<Y, X>>(RESOURCE_ACCOUNT_ADDRESS)
+        }
     }
 
     public fun get_admin_data(): (u64, u8, bool, bool) acquires AdminData {
@@ -873,28 +878,28 @@ module SwapDeployer::AnimeSwapPoolV1 {
     /// Get flash swap coins. User can loan any coins, and repay in the same tx.
     /// In most cases, user may loan one coin, and repay the same or the other coin.
     /// require X < Y.
-    /// * `loan_coin_1` - expected amount of X coins to loan.
-    /// * `loan_coin_2` - expected amount of Y coins to loan.
+    /// * `loan_coin_x` - expected amount of X coins to loan.
+    /// * `loan_coin_y` - expected amount of Y coins to loan.
     /// Returns both loaned X and Y coins: `(Coin<X>, Coin<Y>, Flashloan<X, Y)`.
     public fun flash_swap<X, Y>(
-        loan_coin_1: u64,
-        loan_coin_2: u64
+        loan_coin_x: u64,
+        loan_coin_y: u64
     ): (Coin<X>, Coin<Y>, FlashSwap<X, Y>) acquires LiquidityPool, AdminData {
         // assert check
         assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
         when_not_paused();
-        assert!(loan_coin_1 > 0 || loan_coin_2 > 0, LOAN_ERROR);
+        assert!(loan_coin_x > 0 || loan_coin_y > 0, LOAN_ERROR);
         assert_lp_unlocked<X, Y>();
 
         let lp = borrow_global_mut<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
-        assert!(coin::value(&lp.coin_x_reserve) >= loan_coin_1 && coin::value(&lp.coin_y_reserve) >= loan_coin_2, INSUFFICIENT_AMOUNT);
+        assert!(coin::value(&lp.coin_x_reserve) >= loan_coin_x && coin::value(&lp.coin_y_reserve) >= loan_coin_y, INSUFFICIENT_AMOUNT);
         lp.locked = true;
 
-        let loaned_coin_1 = coin::extract(&mut lp.coin_x_reserve, loan_coin_1);
-        let loaned_coin_2 = coin::extract(&mut lp.coin_y_reserve, loan_coin_2);
+        let loaned_coin_x = coin::extract(&mut lp.coin_x_reserve, loan_coin_x);
+        let loaned_coin_y = coin::extract(&mut lp.coin_y_reserve, loan_coin_y);
 
         // Return loaned amount.
-        (loaned_coin_1, loaned_coin_2, FlashSwap<X, Y> {loan_coin_1, loan_coin_2})
+        (loaned_coin_x, loaned_coin_y, FlashSwap<X, Y> {loan_coin_x, loan_coin_y})
     }
 
     /// Repay flash swap coins.
@@ -915,7 +920,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         when_not_paused();
         assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_NOT_EXIST);
 
-        let FlashSwap { loan_coin_1, loan_coin_2 } = flash_swap;
+        let FlashSwap { loan_coin_x, loan_coin_y } = flash_swap;
         let amount_x_in = coin::value(&x_in);
         let amount_y_in = coin::value(&y_in);
 
@@ -926,8 +931,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
         let reserve_y = coin::value(&lp.coin_y_reserve);
 
         // reserve size before loan out
-        reserve_x = reserve_x + loan_coin_1;
-        reserve_y = reserve_y + loan_coin_2;
+        reserve_x = reserve_x + loan_coin_x;
+        reserve_y = reserve_y + loan_coin_y;
 
         coin::merge(&mut lp.coin_x_reserve, x_in);
         coin::merge(&mut lp.coin_y_reserve, y_in);
@@ -942,10 +947,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
         // event
         let events = borrow_global_mut<Events<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
         event::emit_event(&mut events.flash_swap_event, FlashSwapEvent {
-            loan_coin_1,
-            loan_coin_2,
-            repay_coin_1: amount_x_in,
-            repay_coin_2: amount_y_in,
+            loan_coin_x,
+            loan_coin_y,
+            repay_coin_x: amount_x_in,
+            repay_coin_y: amount_y_in,
         });
     }
 
@@ -1602,9 +1607,9 @@ module SwapDeployer::AnimeSwapPoolV1 {
         let (coin_out_1, coin_out_2, flash_swap) = flash_swap<BTC, USDT>(1000, 1000);
         coin::deposit<BTC>(signer::address_of(another_one), coin_out_1);
         coin::deposit<USDT>(signer::address_of(another_one), coin_out_2);
-        let repay_coin_1 = coin::withdraw<BTC>(another_one, 1004);
-        let repay_coin_2 = coin::withdraw<USDT>(another_one, 1003);
-        pay_flash_swap<BTC, USDT>(repay_coin_1, repay_coin_2, flash_swap);
+        let repay_coin_x = coin::withdraw<BTC>(another_one, 1004);
+        let repay_coin_y = coin::withdraw<USDT>(another_one, 1003);
+        pay_flash_swap<BTC, USDT>(repay_coin_x, repay_coin_y, flash_swap);
         {
             let lp = borrow_global<LiquidityPool<BTC, USDT>>(RESOURCE_ACCOUNT_ADDRESS);
             assert!(coin::value(&lp.coin_x_reserve) == 10004, CONTRACTOR_BALANCE_ERROR);
@@ -1629,9 +1634,9 @@ module SwapDeployer::AnimeSwapPoolV1 {
         let (coin_out_1, coin_out_2, flash_swap) = flash_swap<BTC, USDT>(1000, 1000);
         coin::deposit<BTC>(signer::address_of(another_one), coin_out_1);
         coin::deposit<USDT>(signer::address_of(another_one), coin_out_2);
-        let repay_coin_1 = coin::withdraw<BTC>(another_one, 1003);
-        let repay_coin_2 = coin::withdraw<USDT>(another_one, 1003);
-        pay_flash_swap<BTC, USDT>(repay_coin_1, repay_coin_2, flash_swap);
+        let repay_coin_x = coin::withdraw<BTC>(another_one, 1003);
+        let repay_coin_y = coin::withdraw<USDT>(another_one, 1003);
+        pay_flash_swap<BTC, USDT>(repay_coin_x, repay_coin_y, flash_swap);
     }
 
     // borrow one boin and repay the same coin, greater than swap fee
@@ -1649,8 +1654,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
         let (coin_out_1, coin_out_2, flash_swap) = flash_swap<BTC, USDT>(1000, 0);
         coin::deposit<BTC>(signer::address_of(another_one), coin_out_1);
         coin::deposit<USDT>(signer::address_of(another_one), coin_out_2);
-        let repay_coin_1 = coin::withdraw<BTC>(another_one, 1004);
-        pay_flash_swap<BTC, USDT>(repay_coin_1, coin::zero<USDT>(), flash_swap);
+        let repay_coin_x = coin::withdraw<BTC>(another_one, 1004);
+        pay_flash_swap<BTC, USDT>(repay_coin_x, coin::zero<USDT>(), flash_swap);
         {
             let lp = borrow_global<LiquidityPool<BTC, USDT>>(RESOURCE_ACCOUNT_ADDRESS);
             assert!(coin::value(&lp.coin_x_reserve) == 10004, CONTRACTOR_BALANCE_ERROR);
@@ -1675,7 +1680,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         let (coin_out_1, coin_out_2, flash_swap) = flash_swap<BTC, USDT>(1000, 0);
         coin::deposit<BTC>(signer::address_of(another_one), coin_out_1);
         coin::deposit<USDT>(signer::address_of(another_one), coin_out_2);
-        let repay_coin_1 = coin::withdraw<BTC>(another_one, 1003);
-        pay_flash_swap<BTC, USDT>(repay_coin_1, coin::zero<USDT>(), flash_swap);
+        let repay_coin_x = coin::withdraw<BTC>(another_one, 1003);
+        pay_flash_swap<BTC, USDT>(repay_coin_x, coin::zero<USDT>(), flash_swap);
     }
 }
