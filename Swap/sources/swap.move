@@ -163,6 +163,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
         });
     }
 
+    /**
+     *  Helper functions, for internal use. Some are public for helping other contracts calculation
+     */
+
     /// get reserves size
     /// always return (X_reserve, Y_reserve)
     public fun get_reserves_size<X, Y>(): (u64, u64) acquires LiquidityPool {
@@ -259,20 +263,20 @@ module SwapDeployer::AnimeSwapPoolV1 {
         }
     }
 
-    /// require lp unlocked
+    /// assert lp unlocked
     fun assert_lp_unlocked<X, Y>() acquires LiquidityPool {
         assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_NOT_EXIST);
         let lp = borrow_global<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
         assert!(lp.locked == false, LOCK_ERROR);
     }
 
-    /// require flash swap paused
-    fun when_paused() acquires AdminData {
+    /// assert flash swap paused
+    fun assert_paused() acquires AdminData {
         assert!(borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause_flash, PAUSABLE_ERROR);
     }
 
-    /// require flash swap not paused
-    fun when_not_paused() acquires AdminData {
+    /// assert flash swap not paused
+    fun assert_not_paused() acquires AdminData {
         assert!(!borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause_flash, PAUSABLE_ERROR);
     }
 
@@ -280,42 +284,6 @@ module SwapDeployer::AnimeSwapPoolV1 {
     fun get_resource_account_signer(): signer acquires AdminData {
         let signer_cap = &borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).signer_cap;
         account::create_signer_with_capability(signer_cap)
-    }
-
-    /// create pair, and register events
-    fun create_pair<X, Y>() acquires AdminData, PairInfo {
-        // check lp not exist
-        assert!(!exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_ALREADY_EXIST);
-        let resource_account_signer = get_resource_account_signer();
-        // create lp coin
-        let (lp_b, lp_f, lp_m) = coin::initialize<LPCoin<X, Y>>(&resource_account_signer, utf8(b"AnimeSwapLPCoin"), utf8(b"ANILPCoin"), 8, true);
-        // register coin
-        AnimeSwapPoolV1Library::register_coin<LPCoin<X, Y>>(&resource_account_signer);
-        // register LiquidityPool
-        move_to(&resource_account_signer, LiquidityPool<X, Y>{
-            coin_x_reserve: coin::zero<X>(), coin_y_reserve: coin::zero<Y>(), last_block_timestamp: 0,
-            last_price_x_cumulative: 0, last_price_y_cumulative: 0, k_last: 0,
-            lp_mint_cap: lp_m, lp_freeze_cap: lp_f, lp_burn_cap: lp_b,
-            locked: false,
-        });
-        // add pair_info
-        let pair_meta = get_pair_meta<X, Y>();
-        let pair_info = borrow_global_mut<PairInfo>(RESOURCE_ACCOUNT_ADDRESS);
-        vector::push_back<PairMeta>(&mut pair_info.pair_list, copy pair_meta);
-
-        // init events
-        let events = Events<X, Y> {
-            pair_created_event: account::new_event_handle<PairCreatedEvent<X, Y>>(&resource_account_signer),
-            mint_event: account::new_event_handle<MintEvent<X, Y>>(&resource_account_signer),
-            burn_event: account::new_event_handle<BurnEvent<X, Y>>(&resource_account_signer),
-            swap_event: account::new_event_handle<SwapEvent<X, Y>>(&resource_account_signer),
-            sync_event: account::new_event_handle<SyncEvent<X, Y>>(&resource_account_signer),
-            flash_swap_event: account::new_event_handle<FlashSwapEvent<X, Y>>(&resource_account_signer),
-        };
-        event::emit_event(&mut events.pair_created_event, PairCreatedEvent {
-            meta: pair_meta,
-        });
-        move_to(&resource_account_signer, events);
     }
 
     /// Calculate optimal amounts of coins to add
@@ -363,41 +331,79 @@ module SwapDeployer::AnimeSwapPoolV1 {
         assert!(u256::compare(&balance_xy_adjusted, &balance_xy_old) == 2, K_ERROR);
     }
 
-    /// Swap coin
-    public fun swap<X, Y>(
-        coins_x_in: Coin<X>,
-        amount_x_out: u64,
-        coins_y_in: Coin<Y>,
-        amount_y_out: u64,
-    ): (Coin<X>, Coin<Y>) acquires LiquidityPool, AdminData, Events {
-        assert_lp_unlocked<X, Y>();
-        let amount_x_in = coin::value(&coins_x_in);
-        let amount_y_in = coin::value(&coins_y_in);
-        assert!(amount_x_in > 0 || amount_y_in > 0, INSUFFICIENT_INPUT_AMOUNT);
-        assert!(amount_x_out > 0 || amount_y_out > 0, INSUFFICIENT_OUTPUT_AMOUNT);
-        let lp = borrow_global_mut<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
-        let (reserve_x, reserve_y) = (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve));
-        coin::merge(&mut lp.coin_x_reserve, coins_x_in);
-        coin::merge(&mut lp.coin_y_reserve, coins_y_in);
-        let coins_x_out = coin::extract(&mut lp.coin_x_reserve, amount_x_out);
-        let coins_y_out = coin::extract(&mut lp.coin_y_reserve, amount_y_out);
-        let (balance_x, balance_y) = (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve));
-        assert_k_increase(balance_x, balance_y, amount_x_in, amount_y_in, reserve_x, reserve_y);
-        // update internal
-        update_internal(lp, balance_x, balance_y, reserve_x, reserve_y);
+    /// update cumulative, coin_reserve, block_timestamp
+    fun update_internal<X, Y>(
+        lp: &mut LiquidityPool<X, Y>,
+        balance_x: u64, // new reserve value
+        balance_y: u64,
+        reserve_x: u64, // old reserve value
+        reserve_y: u64
+    ) acquires Events {
+        let now = timestamp::now_seconds();
+        let time_elapsed = ((now - lp.last_block_timestamp) as u128);
+        if (time_elapsed > 0 && reserve_x != 0 && reserve_y != 0) {
+            // allow overflow u128
+            let last_price_x_cumulative_delta = uq64x64::to_u128(uq64x64::fraction(reserve_y, reserve_x)) * time_elapsed;
+            lp.last_price_x_cumulative = AnimeSwapPoolV1Library::overflow_add(lp.last_price_x_cumulative, last_price_x_cumulative_delta);
+
+            let last_price_y_cumulative_delta = uq64x64::to_u128(uq64x64::fraction(reserve_x, reserve_y)) * time_elapsed;
+            lp.last_price_y_cumulative = AnimeSwapPoolV1Library::overflow_add(lp.last_price_y_cumulative, last_price_y_cumulative_delta);
+        };
+        lp.last_block_timestamp = now;
         // event
         let events = borrow_global_mut<Events<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
-        event::emit_event(&mut events.swap_event, SwapEvent {
-            amount_x_in,
-            amount_y_in,
-            amount_x_out,
-            amount_y_out,
+        event::emit_event(&mut events.sync_event, SyncEvent {
+            reserve_x: balance_x,
+            reserve_y: balance_y,
+            last_price_x_cumulative: lp.last_price_x_cumulative,
+            last_price_y_cumulative: lp.last_price_y_cumulative,
         });
-        (coins_x_out, coins_y_out)
+    }
+
+    fun mint_fee_interval<X, Y>(
+        lp: &mut LiquidityPool<X, Y>,
+        admin_data: &AdminData
+    ): bool {
+        let fee_on = admin_data.dao_fee_on;
+        let k_last = lp.k_last;
+        if (fee_on) {
+            if (k_last != 0) {
+                let reserve_x = coin::value(&lp.coin_x_reserve);
+                let reserve_y = coin::value(&lp.coin_y_reserve);
+                let root_k = AnimeSwapPoolV1Library::sqrt(reserve_x, reserve_y);
+                let root_k_last = AnimeSwapPoolV1Library::sqrt_128(k_last);
+                let total_supply = AnimeSwapPoolV1Library::get_lpcoin_total_supply<X, Y>();
+                if (root_k > root_k_last) {
+                    let numerator = total_supply * ((root_k - root_k_last) as u128);
+                    let denominator = (root_k as u128) * (admin_data.dao_fee as u128) + (root_k_last as u128);
+                    let liquidity = ((numerator / denominator) as u64);
+                    if (liquidity > 0) {
+                        mint_coin<X, Y>(&account::create_signer_with_capability(&admin_data.signer_cap), liquidity, &lp.lp_mint_cap);
+                    };
+                }
+            }
+        } else if (k_last != 0) {
+            lp.k_last = 0;
+        };
+        fee_on
+    }
+
+    /// mint coin with MintCapability
+    fun mint_coin<X, Y>(
+        account: &signer,
+        amount: u64,
+        mint_cap: &MintCapability<LPCoin<X, Y>>
+    ) {
+        let acc_addr = signer::address_of(account);
+        if (!coin::is_account_registered<LPCoin<X, Y>>(acc_addr)) {
+            coin::register<LPCoin<X, Y>>(account);
+        };
+        let coins = coin::mint<LPCoin<X, Y>>(amount, mint_cap);
+        coin::deposit(acc_addr, coins);
     }
 
     /**
-     * entry functions
+     * Entry functions
      */
 
     /// Add liquidity. If pair not exist, create pair first
@@ -549,8 +555,9 @@ module SwapDeployer::AnimeSwapPoolV1 {
     }
 
     /**
-     *  set fee config
+     *  Setting config functions
      */
+
     public entry fun set_dao_fee_to(
         account: &signer,
         dao_fee_to: address
@@ -613,7 +620,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     public entry fun pause(
         account: &signer
     ) acquires AdminData {
-        when_not_paused();
+        assert_not_paused();
         let admin_data = borrow_global_mut<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
         assert!(signer::address_of(account) == admin_data.admin_address, FORBIDDEN);
         admin_data.is_pause_flash = true;
@@ -622,10 +629,57 @@ module SwapDeployer::AnimeSwapPoolV1 {
     public entry fun unpause(
         account: &signer
     ) acquires AdminData {
-        when_paused();
+        assert_paused();
         let admin_data = borrow_global_mut<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
         assert!(signer::address_of(account) == admin_data.admin_address, FORBIDDEN);
         admin_data.is_pause_flash = false;
+    }
+
+    /**
+     *  Router functions, can be called by other contracts
+     */
+
+    /// Create pair, and register events
+    /// require X < Y
+    public fun create_pair<X, Y>() acquires AdminData, PairInfo {
+        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
+        assert!(!exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_ALREADY_EXIST);
+        let resource_account_signer = get_resource_account_signer();
+        // create lp coin
+        let (lp_b, lp_f, lp_m) = coin::initialize<LPCoin<X, Y>>(&resource_account_signer, utf8(b"AnimeSwapLPCoin"), utf8(b"ANILPCoin"), 8, true);
+        // register coin
+        AnimeSwapPoolV1Library::register_coin<LPCoin<X, Y>>(&resource_account_signer);
+        // register LiquidityPool
+        move_to(&resource_account_signer, LiquidityPool<X, Y>{
+            coin_x_reserve: coin::zero<X>(),
+            coin_y_reserve: coin::zero<Y>(),
+            last_block_timestamp: 0,
+            last_price_x_cumulative: 0,
+            last_price_y_cumulative: 0,
+            k_last: 0,
+            lp_mint_cap: lp_m,
+            lp_freeze_cap: lp_f,
+            lp_burn_cap: lp_b,
+            locked: false,
+        });
+        // add pair_info
+        let pair_meta = get_pair_meta<X, Y>();
+        let pair_info = borrow_global_mut<PairInfo>(RESOURCE_ACCOUNT_ADDRESS);
+        vector::push_back<PairMeta>(&mut pair_info.pair_list, copy pair_meta);
+
+        // init events
+        let events = Events<X, Y> {
+            pair_created_event: account::new_event_handle<PairCreatedEvent<X, Y>>(&resource_account_signer),
+            mint_event: account::new_event_handle<MintEvent<X, Y>>(&resource_account_signer),
+            burn_event: account::new_event_handle<BurnEvent<X, Y>>(&resource_account_signer),
+            swap_event: account::new_event_handle<SwapEvent<X, Y>>(&resource_account_signer),
+            sync_event: account::new_event_handle<SyncEvent<X, Y>>(&resource_account_signer),
+            flash_swap_event: account::new_event_handle<FlashSwapEvent<X, Y>>(&resource_account_signer),
+        };
+        event::emit_event(&mut events.pair_created_event, PairCreatedEvent {
+            meta: pair_meta,
+        });
+        move_to(&resource_account_signer, events);
     }
 
     /// Add liquidity
@@ -685,76 +739,9 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coins_out
     }
 
-    /// update cumulative, coin_reserve, block_timestamp
-    fun update_internal<X, Y>(
-        lp: &mut LiquidityPool<X, Y>,
-        balance_x: u64, // new reserve value
-        balance_y: u64,
-        reserve_x: u64, // old reserve value
-        reserve_y: u64
-    ) acquires Events {
-        let now = timestamp::now_seconds();
-        let time_elapsed = ((now - lp.last_block_timestamp) as u128);
-        if (time_elapsed > 0 && reserve_x != 0 && reserve_y != 0) {
-            // allow overflow u128
-            let last_price_x_cumulative_delta = uq64x64::to_u128(uq64x64::fraction(reserve_y, reserve_x)) * time_elapsed;
-            lp.last_price_x_cumulative = AnimeSwapPoolV1Library::overflow_add(lp.last_price_x_cumulative, last_price_x_cumulative_delta);
-
-            let last_price_y_cumulative_delta = uq64x64::to_u128(uq64x64::fraction(reserve_x, reserve_y)) * time_elapsed;
-            lp.last_price_y_cumulative = AnimeSwapPoolV1Library::overflow_add(lp.last_price_y_cumulative, last_price_y_cumulative_delta);
-        };
-        lp.last_block_timestamp = now;
-        // event
-        let events = borrow_global_mut<Events<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
-        event::emit_event(&mut events.sync_event, SyncEvent {
-            reserve_x: balance_x,
-            reserve_y: balance_y,
-            last_price_x_cumulative: lp.last_price_x_cumulative,
-            last_price_y_cumulative: lp.last_price_y_cumulative,
-        });
-    }
-
-    fun mint_fee_interval<X, Y>(
-        lp: &mut LiquidityPool<X, Y>,
-        admin_data: &AdminData
-    ): bool {
-        let fee_on = admin_data.dao_fee_on;
-        let k_last = lp.k_last;
-        if (fee_on) {
-            if (k_last != 0) {
-                let reserve_x = coin::value(&lp.coin_x_reserve);
-                let reserve_y = coin::value(&lp.coin_y_reserve);
-                let root_k = AnimeSwapPoolV1Library::sqrt(reserve_x, reserve_y);
-                let root_k_last = AnimeSwapPoolV1Library::sqrt_128(k_last);
-                let total_supply = AnimeSwapPoolV1Library::get_lpcoin_total_supply<X, Y>();
-                if (root_k > root_k_last) {
-                    let numerator = total_supply * ((root_k - root_k_last) as u128);
-                    let denominator = (root_k as u128) * (admin_data.dao_fee as u128) + (root_k_last as u128);
-                    let liquidity = ((numerator / denominator) as u64);
-                    if (liquidity > 0) {
-                        mint_coin<X, Y>(&account::create_signer_with_capability(&admin_data.signer_cap), liquidity, &lp.lp_mint_cap);
-                    };
-                }
-            }
-        } else if (k_last != 0) {
-            lp.k_last = 0;
-        };
-        fee_on
-    }
-
-    /// mint coin with MintCapability
-    fun mint_coin<X, Y>(
-        account: &signer,
-        amount: u64,
-        mint_cap: &MintCapability<LPCoin<X, Y>>
-    ) {
-        let acc_addr = signer::address_of(account);
-        if (!coin::is_account_registered<LPCoin<X, Y>>(acc_addr)) {
-            coin::register<LPCoin<X, Y>>(account);
-        };
-        let coins = coin::mint<LPCoin<X, Y>>(amount, mint_cap);
-        coin::deposit(acc_addr, coins);
-    }
+    /**
+     *  Low level functions, can be called by other contracts
+     */
 
     /// Mint new LPCoin
     public fun mint<X, Y>(
@@ -840,8 +827,41 @@ module SwapDeployer::AnimeSwapPoolV1 {
         (x_coin_to_return, y_coin_to_return)
     }
 
+    /// Swap coins
+    public fun swap<X, Y>(
+        coins_x_in: Coin<X>,
+        amount_x_out: u64,
+        coins_y_in: Coin<Y>,
+        amount_y_out: u64,
+    ): (Coin<X>, Coin<Y>) acquires LiquidityPool, AdminData, Events {
+        assert_lp_unlocked<X, Y>();
+        let amount_x_in = coin::value(&coins_x_in);
+        let amount_y_in = coin::value(&coins_y_in);
+        assert!(amount_x_in > 0 || amount_y_in > 0, INSUFFICIENT_INPUT_AMOUNT);
+        assert!(amount_x_out > 0 || amount_y_out > 0, INSUFFICIENT_OUTPUT_AMOUNT);
+        let lp = borrow_global_mut<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
+        let (reserve_x, reserve_y) = (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve));
+        coin::merge(&mut lp.coin_x_reserve, coins_x_in);
+        coin::merge(&mut lp.coin_y_reserve, coins_y_in);
+        let coins_x_out = coin::extract(&mut lp.coin_x_reserve, amount_x_out);
+        let coins_y_out = coin::extract(&mut lp.coin_y_reserve, amount_y_out);
+        let (balance_x, balance_y) = (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve));
+        assert_k_increase(balance_x, balance_y, amount_x_in, amount_y_in, reserve_x, reserve_y);
+        // update internal
+        update_internal(lp, balance_x, balance_y, reserve_x, reserve_y);
+        // event
+        let events = borrow_global_mut<Events<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
+        event::emit_event(&mut events.swap_event, SwapEvent {
+            amount_x_in,
+            amount_y_in,
+            amount_x_out,
+            amount_y_out,
+        });
+        (coins_x_out, coins_y_out)
+    }
+
     /**
-     *  public functions for other contract
+     *  Misc public functions for other contract
      */
 
     /// price oracle for other contract
@@ -852,16 +872,6 @@ module SwapDeployer::AnimeSwapPoolV1 {
         } else {
             let lp = borrow_global<LiquidityPool<Y, X>>(RESOURCE_ACCOUNT_ADDRESS);
             (lp.last_price_y_cumulative, lp.last_price_x_cumulative)
-        }
-    }
-
-    public fun get_reserves<X, Y>(): (u64, u64, u64) acquires LiquidityPool {
-        if (AnimeSwapPoolV1Library::compare<X, Y>()) {
-            let lp = borrow_global<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
-            (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve), lp.last_block_timestamp)
-        } else {
-            let lp = borrow_global<LiquidityPool<Y, X>>(RESOURCE_ACCOUNT_ADDRESS);
-            (coin::value(&lp.coin_y_reserve), coin::value(&lp.coin_x_reserve), lp.last_block_timestamp)
         }
     }
 
@@ -883,6 +893,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
         pair_info.pair_list
     }
 
+    /**
+     *  Flash swap functions, be called by other contracts
+     */
+
     /// Get flash swap coins. User can loan any coins, and repay in the same tx.
     /// In most cases, user may loan one coin, and repay the same or the other coin.
     /// require X < Y.
@@ -895,7 +909,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     ): (Coin<X>, Coin<Y>, FlashSwap<X, Y>) acquires LiquidityPool, AdminData {
         // assert check
         assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
-        when_not_paused();
+        assert_not_paused();
         assert!(loan_coin_x > 0 || loan_coin_y > 0, LOAN_ERROR);
         assert_lp_unlocked<X, Y>();
 
@@ -925,7 +939,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     ) acquires LiquidityPool, AdminData, Events {
         // assert check
         assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
-        when_not_paused();
+        assert_not_paused();
         assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_NOT_EXIST);
 
         let FlashSwap { loan_coin_x, loan_coin_y } = flash_swap;
@@ -1012,8 +1026,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
         });
         // create default 3 pairs
         create_pair<BTC, USDT>();
-        create_pair<BTC, std::aptos_coin::AptosCoin>();
-        create_pair<USDT, std::aptos_coin::AptosCoin>();
+        create_pair<std::aptos_coin::AptosCoin, BTC>();
+        create_pair<std::aptos_coin::AptosCoin, USDT>();
     }
 
     #[test_only]
