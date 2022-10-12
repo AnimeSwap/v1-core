@@ -124,10 +124,7 @@ module SwapDeployer::AnimeSwapPoolV1Library {
 
     // get coin::supply<LPCoin<CoinType1, CoinType2>>
     public fun get_lpcoin_total_supply<CoinType1, CoinType2>(): u128 {
-        option::get_with_default(
-            &coin::supply<LPCoin<CoinType1, CoinType2>>(),
-            0u128
-        )
+        option::extract(&mut coin::supply<LPCoin<CoinType1, CoinType2>>())
     }
 
     // register coin if not registered
