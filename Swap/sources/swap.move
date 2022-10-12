@@ -66,11 +66,13 @@ module SwapDeployer::AnimeSwapPoolV1 {
     struct MintEvent<phantom X, phantom Y> has drop, store {
         amount_x: u64,
         amount_y: u64,
+        liquidity: u64,
     }
 
     struct BurnEvent<phantom X, phantom Y> has drop, store {
         amount_x: u64,
         amount_y: u64,
+        liquidity: u64,
     }
 
     struct SwapEvent<phantom X, phantom Y> has drop, store {
@@ -109,11 +111,11 @@ module SwapDeployer::AnimeSwapPoolV1 {
     const FORBIDDEN: u64 = 103;
     /// When not enough amount for pool
     const INSUFFICIENT_AMOUNT: u64 = 104;
-    /// When not enough liqudity amount
+    /// When not enough liquidity amount
     const INSUFFICIENT_LIQUIDITY: u64 = 105;
-    /// When not enough liqudity minted
+    /// When not enough liquidity minted
     const INSUFFICIENT_LIQUIDITY_MINT: u64 = 106;
-    /// When not enough liqudity burned
+    /// When not enough liquidity burned
     const INSUFFICIENT_LIQUIDITY_BURN: u64 = 107;
     /// When not enough X amount
     const INSUFFICIENT_X_AMOUNT: u64 = 108;
@@ -428,11 +430,18 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_x_min: u64,
         amount_y_min: u64,
     ) acquires LiquidityPool, AdminData, Events {
+        let (x_out, y_out);
         if (AnimeSwapPoolV1Library::compare<X, Y>()) {
-            remove_liquidity<X, Y>(account, liquidity, amount_x_min, amount_y_min);
+            let coins = coin::withdraw<LPCoin<X, Y>>(account, liquidity);
+            (x_out, y_out) = remove_liquidity<X, Y>(coins, amount_x_min, amount_y_min);
         } else {
-            remove_liquidity<Y, X>(account, liquidity, amount_y_min, amount_x_min);
-        }
+            let coins = coin::withdraw<LPCoin<Y, X>>(account, liquidity);
+            (y_out, x_out) = remove_liquidity<Y, X>(coins, amount_y_min, amount_x_min);
+        };
+        // transfer
+        let account_addr = signer::address_of(account);
+        coin::deposit(account_addr, x_out);
+        coin::deposit(account_addr, y_out);
     }
 
     /// 1 pair swap X->Y
@@ -619,10 +628,9 @@ module SwapDeployer::AnimeSwapPoolV1 {
         admin_data.is_pause_flash = false;
     }
 
-    /**
-     *  add liquidity
-     */
-    fun add_liquidity<X, Y>(
+    /// Add liquidity
+    /// require X < Y
+    public fun add_liquidity<X, Y>(
         account: &signer,
         amount_x_desired: u64,
         amount_y_desired: u64,
@@ -630,6 +638,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_y_min: u64,
     ) acquires LiquidityPool, AdminData, Events {
         // check lp exist
+        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
         assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_NOT_EXIST);
         let (amount_x, amount_y) = calc_optimal_coin_values<X, Y>(amount_x_desired, amount_y_desired, amount_x_min, amount_y_min);
         let coin_x = coin::withdraw<X>(account, amount_x);
@@ -643,23 +652,18 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin::deposit(acc_addr, lp_coins);
     }
 
-    /**
-     *  remore liquidity
-     *  require X < Y
-     */
-    fun remove_liquidity<X, Y>(
-        account: &signer,
-        liquidity: u64,
+    /// Remove liquidity
+    /// require X < Y
+    public fun remove_liquidity<X, Y>(
+        coins: Coin<LPCoin<X, Y>>,
         amount_x_min: u64,
         amount_y_min: u64,
-    ) acquires LiquidityPool, AdminData, Events {
-        let coin = coin::withdraw<LPCoin<X, Y>>(account, liquidity);
-        let (x_out, y_out) = burn<X, Y>(coin);
+    ): (Coin<X>, Coin<Y>) acquires LiquidityPool, AdminData, Events {
+        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
+        let (x_out, y_out) = burn<X, Y>(coins);
         assert!(coin::value(&x_out) >= amount_x_min, INSUFFICIENT_X_AMOUNT);
         assert!(coin::value(&y_out) >= amount_y_min, INSUFFICIENT_Y_AMOUNT);
-        // transfer
-        coin::deposit(signer::address_of(account), x_out);
-        coin::deposit(signer::address_of(account), y_out);
+        (x_out, y_out)
     }
 
     /// Swap X to Y
@@ -758,7 +762,9 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin_y: Coin<Y>
     ): Coin<LPCoin<X, Y>> acquires LiquidityPool, AdminData, Events {
         assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
+        assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_NOT_EXIST);
         assert_lp_unlocked<X, Y>();
+
         let amount_x = coin::value(&coin_x);
         let amount_y = coin::value(&coin_y);
         // get reserve
@@ -792,6 +798,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         event::emit_event(&mut events.mint_event, MintEvent {
             amount_x,
             amount_y,
+            liquidity,
         });
         coins
     }
@@ -828,6 +835,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         event::emit_event(&mut events.burn_event, BurnEvent {
             amount_x,
             amount_y,
+            liquidity: liquidity_amount,
         });
         (x_coin_to_return, y_coin_to_return)
     }
