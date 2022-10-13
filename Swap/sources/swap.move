@@ -320,15 +320,23 @@ module SwapDeployer::AnimeSwapPoolV1 {
         reserve_x: u64,
         reserve_y: u64,
     ) acquires AdminData {
-        // use u256 to prevent overflow
         let swap_fee = borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).swap_fee;
         let balance_x_adjusted = (balance_x as u128) * 10000 - (amount_x_in as u128) * (swap_fee as u128);
         let balance_y_adjusted = (balance_y as u128) * 10000 - (amount_y_in as u128) * (swap_fee as u128);
-        let balance_xy_adjusted = u256::mul(u256::from_u128(balance_x_adjusted), u256::from_u128(balance_y_adjusted));
         let balance_xy_old_not_scaled = (reserve_x as u128) * (reserve_y as u128);
-        let balance_xy_old = u256::mul(u256::from_u128(balance_xy_old_not_scaled), u256::from_u128(100000000));
+        let scale = 100000000;
         // should be: new_reserve_x * new_reserve_y > old_reserve_x * old_eserve_y
-        assert!(u256::compare(&balance_xy_adjusted, &balance_xy_old) == 2, K_ERROR);
+        // gas saving
+        if (
+            AnimeSwapPoolV1Library::is_overflow_mul(balance_x_adjusted, balance_y_adjusted)
+            || AnimeSwapPoolV1Library::is_overflow_mul(balance_xy_old_not_scaled, scale)
+        ) {
+            let balance_xy_adjusted = u256::mul(u256::from_u128(balance_x_adjusted), u256::from_u128(balance_y_adjusted));
+            let balance_xy_old = u256::mul(u256::from_u128(balance_xy_old_not_scaled), u256::from_u128(scale));
+            assert!(u256::compare(&balance_xy_adjusted, &balance_xy_old) == 2, K_ERROR);
+        } else {
+            assert!(balance_x_adjusted * balance_y_adjusted >= balance_xy_old_not_scaled * scale, K_ERROR)
+        };
     }
 
     /// update cumulative, coin_reserve, block_timestamp
@@ -374,11 +382,22 @@ module SwapDeployer::AnimeSwapPoolV1 {
                 let root_k_last = AnimeSwapPoolV1Library::sqrt_128(k_last);
                 let total_supply = AnimeSwapPoolV1Library::get_lpcoin_total_supply<LPCoin<X, Y>>();
                 if (root_k > root_k_last) {
-                    let numerator = total_supply * ((root_k - root_k_last) as u128);
-                    let denominator = (root_k as u128) * (admin_data.dao_fee as u128) + (root_k_last as u128);
-                    let liquidity = ((numerator / denominator) as u64);
-                    if (liquidity > 0) {
-                        mint_coin<X, Y>(&account::create_signer_with_capability(&admin_data.signer_cap), liquidity, &lp.lp_mint_cap);
+                    let delta_k = ((root_k - root_k_last) as u128);
+                    // gas saving
+                    if (AnimeSwapPoolV1Library::is_overflow_mul(total_supply, delta_k)) {
+                        let numerator = u256::mul(u256::from_u128(total_supply), u256::from_u128(delta_k));
+                        let denominator = u256::from_u128((root_k as u128) * (admin_data.dao_fee as u128) + (root_k_last as u128));
+                        let liquidity = u256::as_u64(u256::div(numerator, denominator));
+                        if (liquidity > 0) {
+                            mint_coin<X, Y>(&account::create_signer_with_capability(&admin_data.signer_cap), liquidity, &lp.lp_mint_cap);
+                        };
+                    } else {
+                        let numerator = total_supply * delta_k;
+                        let denominator = (root_k as u128) * (admin_data.dao_fee as u128) + (root_k_last as u128);
+                        let liquidity = ((numerator / denominator) as u64);
+                        if (liquidity > 0) {
+                            mint_coin<X, Y>(&account::create_signer_with_capability(&admin_data.signer_cap), liquidity, &lp.lp_mint_cap);
+                        };
                     };
                 }
             }
@@ -770,6 +789,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
             liquidity = AnimeSwapPoolV1Library::sqrt(amount_x, amount_y) - MINIMUM_LIQUIDITY;
             mint_coin<X, Y>(&get_resource_account_signer(), MINIMUM_LIQUIDITY, &lp.lp_mint_cap);
         } else {
+            // normal tx should never overflow
             let amount_1 = ((amount_x as u128) * total_supply / (reserve_x as u128) as u64);
             let amount_2 = ((amount_y as u128) * total_supply / (reserve_y as u128) as u64);
             liquidity = AnimeSwapPoolV1Library::min(amount_1, amount_2);

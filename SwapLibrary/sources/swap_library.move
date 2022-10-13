@@ -108,6 +108,12 @@ module SwapDeployer::AnimeSwapPoolV1Library {
         a + b
     }
 
+    // Check if mul maybe overflow
+    // The result maybe false positive
+    public fun is_overflow_mul(a: u128, b: u128): bool {
+        MAX_U128 / b <= a
+    }
+
     // compare type, when use, CoinType1 should < CoinType2
     public fun compare<CoinType1, CoinType2>(): bool{
         let type_name_coin_1 = type_info::type_name<CoinType1>();
@@ -163,6 +169,18 @@ module SwapDeployer::AnimeSwapPoolV1Library {
         let u128_max_add_2_u256 = overflow_add(MAX_U128, 2);
         assert!(u128_max_add_1_u256 == 0, TEST_ERROR);
         assert!(u128_max_add_2_u256 == 1, TEST_ERROR);
+    }
+
+    #[test]
+    public entry fun test_is_overflow_mul() {
+        let overflow_1 = is_overflow_mul(MAX_U128 / 2, 3);
+        let overflow_2 = is_overflow_mul(MAX_U128 / 3, 3);  // false positive
+        let not_overflow_1 = is_overflow_mul(MAX_U128 / 2 - 1, 2);
+        let not_overflow_2 = is_overflow_mul(MAX_U128 / 3 - 1, 3);
+        assert!(overflow_1, TEST_ERROR);
+        assert!(overflow_2, TEST_ERROR);
+        assert!(!not_overflow_1, TEST_ERROR);
+        assert!(!not_overflow_2, TEST_ERROR);
     }
 
     #[test]
