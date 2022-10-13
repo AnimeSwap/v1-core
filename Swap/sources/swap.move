@@ -1,7 +1,7 @@
 module SwapDeployer::AnimeSwapPoolV1 {
     use ResourceAccountDeployer::LPCoinV1::LPCoin;
     use SwapDeployer::AnimeSwapPoolV1Library;
-    use SwapDeployer::lp_resource_account;
+    use SwapDeployer::LPResourceAccount;
     use std::signer;
     use std::type_info::{Self, TypeInfo};
     use std::string::utf8;
@@ -146,7 +146,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     // initialize
     fun init_module(admin: &signer) {
         // init admin data
-        let signer_cap = lp_resource_account::retrieve_signer_cap(admin);
+        let signer_cap = LPResourceAccount::retrieve_signer_cap(admin);
         let resource_account = &account::create_signer_with_capability(&signer_cap);
         move_to(resource_account, AdminData {
             signer_cap,
@@ -372,7 +372,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
                 let reserve_y = coin::value(&lp.coin_y_reserve);
                 let root_k = AnimeSwapPoolV1Library::sqrt(reserve_x, reserve_y);
                 let root_k_last = AnimeSwapPoolV1Library::sqrt_128(k_last);
-                let total_supply = AnimeSwapPoolV1Library::get_lpcoin_total_supply<X, Y>();
+                let total_supply = AnimeSwapPoolV1Library::get_lpcoin_total_supply<LPCoin<X, Y>>();
                 if (root_k > root_k_last) {
                     let numerator = total_supply * ((root_k - root_k_last) as u128);
                     let denominator = (root_k as u128) * (admin_data.dao_fee as u128) + (root_k_last as u128);
@@ -764,7 +764,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin::merge(&mut lp.coin_y_reserve, coin_y);
         let (balance_x, balance_y) = (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve));
 
-        let total_supply = AnimeSwapPoolV1Library::get_lpcoin_total_supply<X, Y>();
+        let total_supply = AnimeSwapPoolV1Library::get_lpcoin_total_supply<LPCoin<X, Y>>();
         let liquidity;
         if (total_supply == 0) {
             liquidity = AnimeSwapPoolV1Library::sqrt(amount_x, amount_y) - MINIMUM_LIQUIDITY;
@@ -804,7 +804,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         // feeOn
         let fee_on = mint_fee_interval<X, Y>(lp, admin_data);
 
-        let total_supply = AnimeSwapPoolV1Library::get_lpcoin_total_supply<X, Y>();
+        let total_supply = AnimeSwapPoolV1Library::get_lpcoin_total_supply<LPCoin<X, Y>>();
         let amount_x = ((liquidity_amount as u128) * (reserve_x as u128) / total_supply as u64);
         let amount_y = ((liquidity_amount as u128) * (reserve_y as u128) / total_supply as u64);
         let x_coin_to_return = coin::extract(&mut lp.coin_x_reserve, amount_x);

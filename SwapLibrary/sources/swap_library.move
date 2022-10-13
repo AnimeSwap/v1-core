@@ -1,5 +1,4 @@
 module SwapDeployer::AnimeSwapPoolV1Library {
-    use ResourceAccountDeployer::LPCoinV1::LPCoin;
     use std::signer;
     use std::type_info;
     use aptos_std::string;
@@ -122,9 +121,9 @@ module SwapDeployer::AnimeSwapPoolV1Library {
         comparator::is_smaller_than(&struct_cmp)
     }
 
-    // get coin::supply<LPCoin<CoinType1, CoinType2>>
-    public fun get_lpcoin_total_supply<CoinType1, CoinType2>(): u128 {
-        option::extract(&mut coin::supply<LPCoin<CoinType1, CoinType2>>())
+    // get coin::supply<LPCoin>
+    public fun get_lpcoin_total_supply<LPCoin>(): u128 {
+        option::extract(&mut coin::supply<LPCoin>())
     }
 
     // register coin if not registered
@@ -151,8 +150,6 @@ module SwapDeployer::AnimeSwapPoolV1Library {
         false
     }
 
-    #[test_only]
-    use SwapDeployer::TestCoinsV1::{BTC, USDT};
     #[test_only]
     const TEST_ERROR:u64 = 10000;
     #[test_only]
@@ -202,14 +199,14 @@ module SwapDeployer::AnimeSwapPoolV1Library {
     struct TestCoinA {}
     #[test_only]
     struct TestCoinB {}
+    #[test_only]
+    struct TestCoinAA {}
 
     #[test]
     public entry fun test_compare() {
-        let a = compare<USDT, BTC>();
-        assert!(a == false, TEST_ERROR);
-        let a = compare<BTC, USDT>();
-        assert!(a == true, TEST_ERROR);
         let a = compare<TestCoinA, TestCoinB>();
+        assert!(a == true, TEST_ERROR);
+        let a = compare<TestCoinB, TestCoinAA>();
         assert!(a == true, TEST_ERROR);
     }
 }
