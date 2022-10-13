@@ -29,7 +29,6 @@ aptos move publish --package-dir PATH_TO_REPO/Swap/
 # admin steps
 # TestCoinsV1
 aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::initialize
-aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::register_coins_all
 aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::mint_coin \
 --args address:0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c u64:20000000000000000 \
 --type-args 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::USDT
@@ -45,13 +44,13 @@ aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35
 --type-args 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::BTC
 # AnimeSwapPool
 aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::AnimeSwapPoolV1::add_liquidity_entry \
---args u64:10000000000 u64:100000000 u64:1 u64:1 u64:1691479027 \
+--args u64:10000000000 u64:100000000 u64:1 u64:1 \
 --type-args 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::USDT 0x1::aptos_coin::AptosCoin
 aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::AnimeSwapPoolV1::add_liquidity_entry \
---args u64:10000000 u64:100000000 u64:1 u64:1 u64:1691479027 \
+--args u64:10000000 u64:100000000 u64:1 u64:1 \
 --type-args 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::BTC 0x1::aptos_coin::AptosCoin
 aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::AnimeSwapPoolV1::add_liquidity_entry \
---args u64:100000000 u64:100000000000 u64:1 u64:1 u64:1691479027 \
+--args u64:100000000 u64:100000000000 u64:1 u64:1 \
 --type-args 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::BTC 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::USDT
 
 # user
@@ -64,20 +63,20 @@ aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35
 --type-args 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::BTC
 # swap (type args shows the swap direction, in this example, swap BTC to APT)
 aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::AnimeSwapPoolV1::swap_exact_coins_for_coins_entry \
---args u64:100 u64:1 address:<0xUser> u64:1691479027 \
+--args u64:100 u64:1 \
 --type-args 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::BTC 0x1::aptos_coin::AptosCoin
 # swap
 aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::AnimeSwapPoolV1::swap_coins_for_exact_coins_entry \
---args u64:100 u64:1000000000 address:<0xUser> u64:1691479027 \
+--args u64:100 u64:1000000000 \
 --type-args 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::BTC 0x1::aptos_coin::AptosCoin
 # multiple pair swap (this example, swap 100 BTC->APT->USDT)
 aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::AnimeSwapPoolV1::swap_exact_coins_for_coins_2_pair_entry \
---args u64:100 u64:1 address:<0xUser> u64:1691479027 \
+--args u64:100 u64:1 \
 --type-args 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::BTC 0x1::aptos_coin::AptosCoin 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::USDT
 # add lp (if pair not exist, will auto create lp first)
 aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::AnimeSwapPoolV1::add_liquidity_entry \
---args u64:1000 u64:10000 u64:1 u64:1 u64:1691479027 \
+--args u64:1000 u64:10000 u64:1 u64:1 \
 --type-args 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::BTC 0x1::aptos_coin::AptosCoin
 aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::AnimeSwapPoolV1::remove_liquidity_entry \
---args u64:1000 u64:1 u64:1 u64:1691479027 \
+--args u64:1000 u64:1 u64:1 \
 --type-args 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::BTC 0x1::aptos_coin::AptosCoin
