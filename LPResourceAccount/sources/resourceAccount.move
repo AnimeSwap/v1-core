@@ -1,5 +1,5 @@
 /// The module used to create user resource account for swap and deploy LP coins under that account.
-module SwapDeployer::lp_resource_account {
+module SwapDeployer::LPResourceAccount {
     use std::signer;
 
     use aptos_framework::account::{Self, SignerCapability};

@@ -1,12 +1,13 @@
 module SwapDeployer::AnimeSwapPoolV1Library {
-    use ResourceAccountDeployer::LPCoinV1::LPCoin;
     use std::signer;
     use std::type_info;
     use aptos_std::string;
     use aptos_std::comparator::Self;
     use aptos_framework::coin;
     use std::option::{Self};
-    use u256::u256;
+
+    /// Maximum of u128
+    const MAX_U128: u128 = 340282366920938463463374607431768211455;
 
     const INSUFFICIENT_AMOUNT: u64 = 201;
     const INSUFFICIENT_LIQUIDITY: u64 = 202;
@@ -14,7 +15,7 @@ module SwapDeployer::AnimeSwapPoolV1Library {
     const INSUFFICIENT_OUTPUT_AMOUNT: u64 = 204;
     const COIN_TYPE_SAME_ERROR: u64 = 205;
 
-    // given some amount of an asset and pair reserves, returns an equivalent amount of the other asset
+    /// given some amount of an asset and pair reserves, returns an equivalent amount of the other asset
     public fun quote(
         amount_x: u64,
         reserve_x: u64,
@@ -26,7 +27,7 @@ module SwapDeployer::AnimeSwapPoolV1Library {
         amount_y
     }
 
-    // given an input amount of an asset and pair reserves, returns the maximum output amount of the other asset
+    /// given an input amount of an asset and pair reserves, returns the maximum output amount of the other asset
     public fun get_amount_out(
         amount_in: u64,
         reserve_in: u64,
@@ -35,15 +36,14 @@ module SwapDeployer::AnimeSwapPoolV1Library {
     ): u64 {
         assert!(amount_in > 0, INSUFFICIENT_INPUT_AMOUNT);
         assert!(reserve_in > 0 && reserve_out > 0, INSUFFICIENT_LIQUIDITY);
-        // use u256 to prevent overflow
-        let amount_in_with_fee = u256::mul(u256::from_u64(amount_in), u256::from_u64(10000 - swap_fee));
-        let numerator = u256::mul(amount_in_with_fee, u256::from_u64(reserve_out));
-        let denominator = u256::add(u256::mul(u256::from_u64(reserve_in), u256::from_u64(10000)), amount_in_with_fee);
-        let amount_out = u256::as_u64(u256::div(numerator, denominator));
-        amount_out
+        let amount_in_with_fee = (amount_in as u128) * ((10000 - swap_fee) as u128);
+        let numerator = amount_in_with_fee * (reserve_out as u128);
+        let denominator = (reserve_in as u128) * 10000 + amount_in_with_fee;
+        let amount_out = numerator / denominator;
+        (amount_out as u64)
     }
 
-    // given an output amount of an asset and pair reserves, returns a required input amount of the other asset
+    /// given an output amount of an asset and pair reserves, returns a required input amount of the other asset
     public fun get_amount_in(
         amount_out: u64,
         reserve_in: u64,
@@ -52,11 +52,10 @@ module SwapDeployer::AnimeSwapPoolV1Library {
     ): u64 {
         assert!(amount_out > 0, INSUFFICIENT_OUTPUT_AMOUNT);
         assert!(reserve_in > 0 && reserve_out > 0, INSUFFICIENT_LIQUIDITY);
-        // use u256 to prevent overflow
-        let numerator = u256::mul(u256::mul(u256::from_u64(reserve_in), u256::from_u64(amount_out)), u256::from_u64(10000));
-        let denominator = u256::mul( u256::sub(u256::from_u64(reserve_out), u256::from_u64(amount_out)), u256::from_u64(10000 - swap_fee));
-        let amount_in = u256::as_u64(u256::div(numerator, denominator)) + 1;
-        amount_in
+        let numerator = (reserve_in as u128) * (amount_out as u128) * 10000;
+        let denominator = ((reserve_out - amount_out) as u128) * ((10000 - swap_fee) as u128);
+        let amount_in = numerator / denominator + 1;
+        (amount_in as u64)
     }
 
     // sqrt function
@@ -67,7 +66,7 @@ module SwapDeployer::AnimeSwapPoolV1Library {
         sqrt_128((x as u128) * (y as u128))
     }
 
-    // babylonian method (https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Babylonian_method)
+    /// babylonian method (https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Babylonian_method)
     public fun sqrt_128(
         y: u128
     ): u64 {
@@ -88,12 +87,31 @@ module SwapDeployer::AnimeSwapPoolV1Library {
         }
     }
 
-    // return Math.min
+    /// return Math.min
     public fun min(
         x:u64,
         y:u64
     ): u64 {
         if (x < y) return x else return y
+    }
+
+    /// Add but allow overflow
+    public fun overflow_add(a: u128, b: u128): u128 {
+        let r = MAX_U128 - b;
+        if (r < a) {
+            return a - r - 1
+        };
+        r = MAX_U128 - a;
+        if (r < b) {
+            return b - r - 1
+        };
+        a + b
+    }
+
+    // Check if mul maybe overflow
+    // The result maybe false positive
+    public fun is_overflow_mul(a: u128, b: u128): bool {
+        MAX_U128 / b <= a
     }
 
     // compare type, when use, CoinType1 should < CoinType2
@@ -109,12 +127,9 @@ module SwapDeployer::AnimeSwapPoolV1Library {
         comparator::is_smaller_than(&struct_cmp)
     }
 
-    // get coin::supply<LPCoin<CoinType1, CoinType2>>
-    public fun get_lpcoin_total_supply<CoinType1, CoinType2>(): u128 {
-        option::get_with_default(
-            &coin::supply<LPCoin<CoinType1, CoinType2>>(),
-            0u128
-        )
+    // get coin::supply<LPCoin>
+    public fun get_lpcoin_total_supply<LPCoin>(): u128 {
+        option::extract(&mut coin::supply<LPCoin>())
     }
 
     // register coin if not registered
@@ -142,8 +157,6 @@ module SwapDeployer::AnimeSwapPoolV1Library {
     }
 
     #[test_only]
-    use SwapDeployer::TestCoinsV1::{BTC, USDT};
-    #[test_only]
     const TEST_ERROR:u64 = 10000;
     #[test_only]
     const SQRT_ERROR:u64 = 10001;
@@ -151,17 +164,23 @@ module SwapDeployer::AnimeSwapPoolV1Library {
     const QUOTE_ERROR:u64 = 10002;
 
     #[test]
-    public entry fun test_last_price_x_cumulative_overflow() {
-        let u128_max = 340282366920938463463374607431768211455u128;
-        let u128_max_u256 = u256::from_u128(u128_max);
-        let u128_max_add_1_u256 = u256::add(u128_max_u256, u256::from_u64(1));
-        let u128_max_add_2_u256 = u256::add(u128_max_u256, u256::from_u64(2));
-        let a = u256::as_u128(u256::shr(u256::shl(u128_max_u256, 128), 128));
-        assert!(a == u128_max, TEST_ERROR);
-        let b = u256::as_u128(u256::shr(u256::shl(u128_max_add_1_u256, 128), 128));
-        assert!(b == 0, TEST_ERROR);
-        let c = u256::as_u128(u256::shr(u256::shl(u128_max_add_2_u256, 128), 128));
-        assert!(c == 1, TEST_ERROR);
+    public entry fun test_overflow_add() {
+        let u128_max_add_1_u256 = overflow_add(MAX_U128, 1);
+        let u128_max_add_2_u256 = overflow_add(MAX_U128, 2);
+        assert!(u128_max_add_1_u256 == 0, TEST_ERROR);
+        assert!(u128_max_add_2_u256 == 1, TEST_ERROR);
+    }
+
+    #[test]
+    public entry fun test_is_overflow_mul() {
+        let overflow_1 = is_overflow_mul(MAX_U128 / 2, 3);
+        let overflow_2 = is_overflow_mul(MAX_U128 / 3, 3);  // false positive
+        let not_overflow_1 = is_overflow_mul(MAX_U128 / 2 - 1, 2);
+        let not_overflow_2 = is_overflow_mul(MAX_U128 / 3 - 1, 3);
+        assert!(overflow_1, TEST_ERROR);
+        assert!(overflow_2, TEST_ERROR);
+        assert!(!not_overflow_1, TEST_ERROR);
+        assert!(!not_overflow_2, TEST_ERROR);
     }
 
     #[test]
@@ -198,14 +217,14 @@ module SwapDeployer::AnimeSwapPoolV1Library {
     struct TestCoinA {}
     #[test_only]
     struct TestCoinB {}
+    #[test_only]
+    struct TestCoinAA {}
 
     #[test]
     public entry fun test_compare() {
-        let a = compare<USDT, BTC>();
-        assert!(a == false, TEST_ERROR);
-        let a = compare<BTC, USDT>();
-        assert!(a == true, TEST_ERROR);
         let a = compare<TestCoinA, TestCoinB>();
+        assert!(a == true, TEST_ERROR);
+        let a = compare<TestCoinB, TestCoinAA>();
         assert!(a == true, TEST_ERROR);
     }
 }
