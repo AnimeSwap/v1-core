@@ -1,4 +1,4 @@
-module SwapDeployer::AnimeSwapPoolV1 {
+module SwapDeployer::AnimeSwapPoolV1f1 {
     use ResourceAccountDeployer::LPCoinV1::LPCoin;
     use SwapDeployer::AnimeSwapPoolV1Library;
     use SwapDeployer::LPResourceAccount;
