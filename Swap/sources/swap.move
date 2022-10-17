@@ -106,39 +106,39 @@ module SwapDeployer::AnimeSwapPoolV1 {
     const MAX_U64: u64 = 18446744073709551615u64;
 
     /// When contract error
-    const INTERNAL_ERROR: u64 = 102;
+    const ERR_INTERNAL_ERROR: u64 = 102;
     /// When user is not admin
-    const FORBIDDEN: u64 = 103;
+    const ERR_FORBIDDEN: u64 = 103;
     /// When not enough amount for pool
-    const INSUFFICIENT_AMOUNT: u64 = 104;
+    const ERR_INSUFFICIENT_AMOUNT: u64 = 104;
     /// When not enough liquidity amount
-    const INSUFFICIENT_LIQUIDITY: u64 = 105;
+    const ERR_INSUFFICIENT_LIQUIDITY: u64 = 105;
     /// When not enough liquidity minted
-    const INSUFFICIENT_LIQUIDITY_MINT: u64 = 106;
+    const ERR_INSUFFICIENT_LIQUIDITY_MINT: u64 = 106;
     /// When not enough liquidity burned
-    const INSUFFICIENT_LIQUIDITY_BURN: u64 = 107;
+    const ERR_INSUFFICIENT_LIQUIDITY_BURN: u64 = 107;
     /// When not enough X amount
-    const INSUFFICIENT_X_AMOUNT: u64 = 108;
+    const ERR_INSUFFICIENT_X_AMOUNT: u64 = 108;
     /// When not enough Y amount
-    const INSUFFICIENT_Y_AMOUNT: u64 = 109;
+    const ERR_INSUFFICIENT_Y_AMOUNT: u64 = 109;
     /// When not enough input amount
-    const INSUFFICIENT_INPUT_AMOUNT: u64 = 110;
+    const ERR_INSUFFICIENT_INPUT_AMOUNT: u64 = 110;
     /// When not enough output amount
-    const INSUFFICIENT_OUTPUT_AMOUNT: u64 = 111;
+    const ERR_INSUFFICIENT_OUTPUT_AMOUNT: u64 = 111;
     /// When contract K error
-    const K_ERROR: u64 = 112;
+    const ERR_K_ERROR: u64 = 112;
     /// When already exists on account
-    const PAIR_ALREADY_EXIST: u64 = 115;
+    const ERR_PAIR_ALREADY_EXIST: u64 = 115;
     /// When not exists on account
-    const PAIR_NOT_EXIST: u64 = 116;
+    const ERR_PAIR_NOT_EXIST: u64 = 116;
     /// When error loan amount
-    const LOAN_ERROR: u64 = 117;
+    const ERR_LOAN_ERROR: u64 = 117;
     /// When contract is not reentrant
-    const LOCK_ERROR: u64 = 118;
+    const ERR_LOCK_ERROR: u64 = 118;
     /// When pair has wrong ordering
-    const PAIR_ORDER_ERROR: u64 = 119;
+    const ERR_PAIR_ORDER_ERROR: u64 = 119;
     /// When contract is paused
-    const PAUSABLE_ERROR: u64 = 120;
+    const ERR_PAUSABLE_ERROR: u64 = 120;
 
     const DEPLOYER_ADDRESS: address = @SwapDeployer;
     const RESOURCE_ACCOUNT_ADDRESS: address = @ResourceAccountDeployer;
@@ -265,19 +265,19 @@ module SwapDeployer::AnimeSwapPoolV1 {
 
     /// assert lp unlocked
     fun assert_lp_unlocked<X, Y>() acquires LiquidityPool {
-        assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_NOT_EXIST);
+        assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_ALREADY_EXIST);
         let lp = borrow_global<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
-        assert!(lp.locked == false, LOCK_ERROR);
+        assert!(lp.locked == false, ERR_LOCK_ERROR);
     }
 
     /// assert flash swap paused
     fun assert_paused() acquires AdminData {
-        assert!(borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause_flash, PAUSABLE_ERROR);
+        assert!(borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause_flash, ERR_PAUSABLE_ERROR);
     }
 
     /// assert flash swap not paused
     fun assert_not_paused() acquires AdminData {
-        assert!(!borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause_flash, PAUSABLE_ERROR);
+        assert!(!borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause_flash, ERR_PAUSABLE_ERROR);
     }
 
     /// return pair admin account signer
@@ -300,12 +300,12 @@ module SwapDeployer::AnimeSwapPoolV1 {
         } else {
             let amount_y_optimal = AnimeSwapPoolV1Library::quote(amount_x_desired, reserve_x, reserve_y);
             if (amount_y_optimal <= amount_y_desired) {
-                assert!(amount_y_optimal >= amount_y_min, INSUFFICIENT_Y_AMOUNT);
+                assert!(amount_y_optimal >= amount_y_min, ERR_INSUFFICIENT_Y_AMOUNT);
                 (amount_x_desired, amount_y_optimal)
             } else {
                 let amount_x_optimal = AnimeSwapPoolV1Library::quote(amount_y_desired, reserve_y, reserve_x);
-                assert!(amount_x_optimal <= amount_x_desired, INTERNAL_ERROR);
-                assert!(amount_x_optimal >= amount_x_min, INSUFFICIENT_X_AMOUNT);
+                assert!(amount_x_optimal <= amount_x_desired, ERR_INTERNAL_ERROR);
+                assert!(amount_x_optimal >= amount_x_min, ERR_INSUFFICIENT_X_AMOUNT);
                 (amount_x_optimal, amount_y_desired)
             }
         }
@@ -333,9 +333,9 @@ module SwapDeployer::AnimeSwapPoolV1 {
         ) {
             let balance_xy_adjusted = u256::mul(u256::from_u128(balance_x_adjusted), u256::from_u128(balance_y_adjusted));
             let balance_xy_old = u256::mul(u256::from_u128(balance_xy_old_not_scaled), u256::from_u128(scale));
-            assert!(u256::compare(&balance_xy_adjusted, &balance_xy_old) == 2, K_ERROR);
+            assert!(u256::compare(&balance_xy_adjusted, &balance_xy_old) == 2, ERR_K_ERROR);
         } else {
-            assert!(balance_x_adjusted * balance_y_adjusted >= balance_xy_old_not_scaled * scale, K_ERROR)
+            assert!(balance_x_adjusted * balance_y_adjusted >= balance_xy_old_not_scaled * scale, ERR_K_ERROR)
         };
     }
 
@@ -479,7 +479,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         let coins_in = coin::withdraw<X>(account, amount_in);
         let coins_out;
         coins_out = swap_coins_for_coins<X, Y>(coins_in);
-        assert!(coin::value(&coins_out) >= amount_out_min, INSUFFICIENT_OUTPUT_AMOUNT);
+        assert!(coin::value(&coins_out) >= amount_out_min, ERR_INSUFFICIENT_OUTPUT_AMOUNT);
         AnimeSwapPoolV1Library::register_coin<Y>(account);
         coin::deposit<Y>(signer::address_of(account), coins_out);
     }
@@ -496,7 +496,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         let coins_mid;
         coins_mid = swap_coins_for_coins<X, Y>(coins_in);
         coins_out = swap_coins_for_coins<Y, Z>(coins_mid);
-        assert!(coin::value(&coins_out) >= amount_out_min, INSUFFICIENT_OUTPUT_AMOUNT);
+        assert!(coin::value(&coins_out) >= amount_out_min, ERR_INSUFFICIENT_OUTPUT_AMOUNT);
         AnimeSwapPoolV1Library::register_coin<Z>(account);
         coin::deposit<Z>(signer::address_of(account), coins_out);
     }
@@ -515,7 +515,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coins_mid = swap_coins_for_coins<X, Y>(coins_in);
         coins_mid_2 = swap_coins_for_coins<Y, Z>(coins_mid);
         coins_out = swap_coins_for_coins<Z, W>(coins_mid_2);
-        assert!(coin::value(&coins_out) >= amount_out_min, INSUFFICIENT_OUTPUT_AMOUNT);
+        assert!(coin::value(&coins_out) >= amount_out_min, ERR_INSUFFICIENT_OUTPUT_AMOUNT);
         AnimeSwapPoolV1Library::register_coin<W>(account);
         coin::deposit<W>(signer::address_of(account), coins_out);
     }
@@ -527,7 +527,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_in_max: u64,
     ) acquires LiquidityPool, AdminData, Events {
         let amount_in = get_amounts_in_1_pair<X, Y>(amount_out);
-        assert!(amount_in <= amount_in_max, INSUFFICIENT_INPUT_AMOUNT);
+        assert!(amount_in <= amount_in_max, ERR_INSUFFICIENT_INPUT_AMOUNT);
         let coins_in = coin::withdraw<X>(account, amount_in);
         let coins_out;
         coins_out = swap_coins_for_coins<X, Y>(coins_in);
@@ -542,7 +542,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_in_max: u64,
     ) acquires LiquidityPool, AdminData, Events {
         let amount_in = get_amounts_in_2_pair<X, Y, Z>(amount_out);
-        assert!(amount_in <= amount_in_max, INSUFFICIENT_INPUT_AMOUNT);
+        assert!(amount_in <= amount_in_max, ERR_INSUFFICIENT_INPUT_AMOUNT);
         // swap
         let coins_in = coin::withdraw<X>(account, amount_in);
         let coins_out;
@@ -560,7 +560,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_in_max: u64,
     ) acquires LiquidityPool, AdminData, Events {
         let amount_in = get_amounts_in_3_pair<X, Y, Z, W>(amount_out);
-        assert!(amount_in <= amount_in_max, INSUFFICIENT_INPUT_AMOUNT);
+        assert!(amount_in <= amount_in_max, ERR_INSUFFICIENT_INPUT_AMOUNT);
         // swap
         let coins_in = coin::withdraw<X>(account, amount_in);
         let coins_out;
@@ -582,7 +582,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         dao_fee_to: address
     ) acquires AdminData {
         let admin_data = borrow_global_mut<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
-        assert!(signer::address_of(account) == admin_data.admin_address, FORBIDDEN);
+        assert!(signer::address_of(account) == admin_data.admin_address, ERR_FORBIDDEN);
         admin_data.dao_fee_to = dao_fee_to;
     }
 
@@ -591,7 +591,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         admin_address: address
     ) acquires AdminData {
         let admin_data = borrow_global_mut<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
-        assert!(signer::address_of(account) == admin_data.admin_address, FORBIDDEN);
+        assert!(signer::address_of(account) == admin_data.admin_address, ERR_FORBIDDEN);
         admin_data.admin_address = admin_address;
     }
 
@@ -600,7 +600,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         dao_fee: u8
     ) acquires AdminData {
         let admin_data = borrow_global_mut<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
-        assert!(signer::address_of(account) == admin_data.admin_address, FORBIDDEN);
+        assert!(signer::address_of(account) == admin_data.admin_address, ERR_FORBIDDEN);
         if (dao_fee == 0) {
             admin_data.dao_fee_on = false;
         } else {
@@ -614,8 +614,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
         swap_fee: u64
     ) acquires AdminData {
         let admin_data = borrow_global_mut<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
-        assert!(signer::address_of(account) == admin_data.admin_address, FORBIDDEN);
-        assert!(swap_fee <= 1000, FORBIDDEN);
+        assert!(signer::address_of(account) == admin_data.admin_address, ERR_FORBIDDEN);
+        assert!(swap_fee <= 1000, ERR_FORBIDDEN);
         admin_data.swap_fee = swap_fee;
     }
 
@@ -628,7 +628,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         };
         let admin_data = borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
         let acc_addr = signer::address_of(account);
-        assert!(acc_addr == admin_data.dao_fee_to, FORBIDDEN);
+        assert!(acc_addr == admin_data.dao_fee_to, ERR_FORBIDDEN);
         if (!coin::is_account_registered<LPCoin<X, Y>>(acc_addr)) {
             coin::register<LPCoin<X, Y>>(account);
         };
@@ -641,7 +641,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     ) acquires AdminData {
         assert_not_paused();
         let admin_data = borrow_global_mut<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
-        assert!(signer::address_of(account) == admin_data.admin_address, FORBIDDEN);
+        assert!(signer::address_of(account) == admin_data.admin_address, ERR_FORBIDDEN);
         admin_data.is_pause_flash = true;
     }
 
@@ -650,7 +650,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     ) acquires AdminData {
         assert_paused();
         let admin_data = borrow_global_mut<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
-        assert!(signer::address_of(account) == admin_data.admin_address, FORBIDDEN);
+        assert!(signer::address_of(account) == admin_data.admin_address, ERR_FORBIDDEN);
         admin_data.is_pause_flash = false;
     }
 
@@ -661,8 +661,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
     /// Create pair, and register events
     /// require X < Y
     public fun create_pair<X, Y>() acquires AdminData, PairInfo {
-        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
-        assert!(!exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_ALREADY_EXIST);
+        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
+        assert!(!exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_ALREADY_EXIST);
         let resource_account_signer = get_resource_account_signer();
         // create lp coin
         let (lp_b, lp_f, lp_m) = coin::initialize<LPCoin<X, Y>>(&resource_account_signer, utf8(b"AnimeSwapLPCoin"), utf8(b"ANILPCoin"), 8, true);
@@ -711,8 +711,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_y_min: u64,
     ) acquires LiquidityPool, AdminData, Events {
         // check lp exist
-        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
-        assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_NOT_EXIST);
+        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
+        assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_NOT_EXIST);
         let (amount_x, amount_y) = calc_optimal_coin_values<X, Y>(amount_x_desired, amount_y_desired, amount_x_min, amount_y_min);
         let coin_x = coin::withdraw<X>(account, amount_x);
         let coin_y = coin::withdraw<Y>(account, amount_y);
@@ -732,10 +732,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_x_min: u64,
         amount_y_min: u64,
     ): (Coin<X>, Coin<Y>) acquires LiquidityPool, AdminData, Events {
-        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
+        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
         let (x_out, y_out) = burn<X, Y>(coins);
-        assert!(coin::value(&x_out) >= amount_x_min, INSUFFICIENT_X_AMOUNT);
-        assert!(coin::value(&y_out) >= amount_y_min, INSUFFICIENT_Y_AMOUNT);
+        assert!(coin::value(&x_out) >= amount_x_min, ERR_INSUFFICIENT_X_AMOUNT);
+        assert!(coin::value(&y_out) >= amount_y_min, ERR_INSUFFICIENT_Y_AMOUNT);
         (x_out, y_out)
     }
 
@@ -767,8 +767,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin_x: Coin<X>,
         coin_y: Coin<Y>
     ): Coin<LPCoin<X, Y>> acquires LiquidityPool, AdminData, Events {
-        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
-        assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_NOT_EXIST);
+        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
+        assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_NOT_EXIST);
         assert_lp_unlocked<X, Y>();
 
         let amount_x = coin::value(&coin_x);
@@ -794,7 +794,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
             let amount_2 = ((amount_y as u128) * total_supply / (reserve_y as u128) as u64);
             liquidity = AnimeSwapPoolV1Library::min(amount_1, amount_2);
         };
-        assert!(liquidity > 0, INSUFFICIENT_LIQUIDITY_MINT);
+        assert!(liquidity > 0, ERR_INSUFFICIENT_LIQUIDITY_MINT);
         let coins = coin::mint<LPCoin<X, Y>>(liquidity, &lp.lp_mint_cap);
         // update interval
         update_internal(lp, balance_x, balance_y, reserve_x, reserve_y);
@@ -814,7 +814,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     public fun burn<X, Y>(
         liquidity: Coin<LPCoin<X, Y>>
     ): (Coin<X>, Coin<Y>) acquires LiquidityPool, AdminData, Events {
-        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
+        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
         assert_lp_unlocked<X, Y>();
         let liquidity_amount = coin::value(&liquidity);
         // get lp
@@ -829,7 +829,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         let amount_y = ((liquidity_amount as u128) * (reserve_y as u128) / total_supply as u64);
         let x_coin_to_return = coin::extract(&mut lp.coin_x_reserve, amount_x);
         let y_coin_to_return = coin::extract(&mut lp.coin_y_reserve, amount_y);
-        assert!(amount_x > 0 && amount_y > 0, INSUFFICIENT_LIQUIDITY_BURN);
+        assert!(amount_x > 0 && amount_y > 0, ERR_INSUFFICIENT_LIQUIDITY_BURN);
         let (balance_x, balance_y) = (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve));
         coin::burn<LPCoin<X, Y>>(liquidity, &lp.lp_burn_cap);
 
@@ -857,8 +857,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
         assert_lp_unlocked<X, Y>();
         let amount_x_in = coin::value(&coins_x_in);
         let amount_y_in = coin::value(&coins_y_in);
-        assert!(amount_x_in > 0 || amount_y_in > 0, INSUFFICIENT_INPUT_AMOUNT);
-        assert!(amount_x_out > 0 || amount_y_out > 0, INSUFFICIENT_OUTPUT_AMOUNT);
+        assert!(amount_x_in > 0 || amount_y_in > 0, ERR_INSUFFICIENT_INPUT_AMOUNT);
+        assert!(amount_x_out > 0 || amount_y_out > 0, ERR_INSUFFICIENT_OUTPUT_AMOUNT);
         let lp = borrow_global_mut<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
         let (reserve_x, reserve_y) = (coin::value(&lp.coin_x_reserve), coin::value(&lp.coin_y_reserve));
         coin::merge(&mut lp.coin_x_reserve, coins_x_in);
@@ -928,13 +928,13 @@ module SwapDeployer::AnimeSwapPoolV1 {
         loan_coin_y: u64
     ): (Coin<X>, Coin<Y>, FlashSwap<X, Y>) acquires LiquidityPool, AdminData {
         // assert check
-        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
+        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
         assert_not_paused();
-        assert!(loan_coin_x > 0 || loan_coin_y > 0, LOAN_ERROR);
+        assert!(loan_coin_x > 0 || loan_coin_y > 0, ERR_LOAN_ERROR);
         assert_lp_unlocked<X, Y>();
 
         let lp = borrow_global_mut<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
-        assert!(coin::value(&lp.coin_x_reserve) >= loan_coin_x && coin::value(&lp.coin_y_reserve) >= loan_coin_y, INSUFFICIENT_AMOUNT);
+        assert!(coin::value(&lp.coin_x_reserve) >= loan_coin_x && coin::value(&lp.coin_y_reserve) >= loan_coin_y, ERR_INSUFFICIENT_AMOUNT);
         lp.locked = true;
 
         let loaned_coin_x = coin::extract(&mut lp.coin_x_reserve, loan_coin_x);
@@ -958,15 +958,15 @@ module SwapDeployer::AnimeSwapPoolV1 {
         flash_swap: FlashSwap<X, Y>
     ) acquires LiquidityPool, AdminData, Events {
         // assert check
-        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), PAIR_ORDER_ERROR);
+        assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
         assert_not_paused();
-        assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), PAIR_NOT_EXIST);
+        assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_NOT_EXIST);
 
         let FlashSwap { loan_coin_x, loan_coin_y } = flash_swap;
         let amount_x_in = coin::value(&x_in);
         let amount_y_in = coin::value(&y_in);
 
-        assert!(amount_x_in > 0 || amount_y_in > 0, LOAN_ERROR);
+        assert!(amount_x_in > 0 || amount_y_in > 0, ERR_LOAN_ERROR);
 
         let lp = borrow_global_mut<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
         let reserve_x = coin::value(&lp.coin_x_reserve);
@@ -1612,7 +1612,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         };
     }
 
-    // K_ERROR, not enough coin repay
+    // ERR_K_ERROR, not enough coin repay
     // borrow on boin and repay the other coin but less equal than swap fee
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
     #[expected_failure(abort_code = 112)]
@@ -1659,7 +1659,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         };
     }
 
-    // K_ERROR, not enough coin repay
+    // ERR_K_ERROR, not enough coin repay
     // borrow both boins and repay less equal than swap fee
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
     #[expected_failure(abort_code = 112)]
@@ -1705,7 +1705,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         };
     }
 
-    // K_ERROR, not enough coin repay
+    // ERR_K_ERROR, not enough coin repay
     // borrow one boin and repay the same coin, but less equal than swap fee
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
     #[expected_failure(abort_code = 112)]

@@ -22,7 +22,7 @@ Update your `Move.toml` with
 ```toml
 [dependencies.AnimeSwap]
 git = 'https://github.com/AnimeSwap/v1-core.git'
-rev = 'v0.4.0'
+rev = 'v0.4.1'
 subdir = 'Swap'
 ```
 

@@ -9,11 +9,16 @@ module SwapDeployer::AnimeSwapPoolV1Library {
     /// Maximum of u128
     const MAX_U128: u128 = 340282366920938463463374607431768211455;
 
-    const INSUFFICIENT_AMOUNT: u64 = 201;
-    const INSUFFICIENT_LIQUIDITY: u64 = 202;
-    const INSUFFICIENT_INPUT_AMOUNT: u64 = 203;
-    const INSUFFICIENT_OUTPUT_AMOUNT: u64 = 204;
-    const COIN_TYPE_SAME_ERROR: u64 = 205;
+    /// When not enough amount for pool
+    const ERR_INSUFFICIENT_AMOUNT: u64 = 201;
+    /// When not enough liquidity amount
+    const ERR_INSUFFICIENT_LIQUIDITY: u64 = 202;
+    /// When not enough input amount
+    const ERR_INSUFFICIENT_INPUT_AMOUNT: u64 = 203;
+    /// When not enough output amount
+    const ERR_INSUFFICIENT_OUTPUT_AMOUNT: u64 = 204;
+    /// When two coin type is the same
+    const ERR_COIN_TYPE_SAME_ERROR: u64 = 205;
 
     /// given some amount of an asset and pair reserves, returns an equivalent amount of the other asset
     public fun quote(
@@ -21,8 +26,8 @@ module SwapDeployer::AnimeSwapPoolV1Library {
         reserve_x: u64,
         reserve_y: u64
     ) :u64 {
-        assert!(amount_x > 0, INSUFFICIENT_AMOUNT);
-        assert!(reserve_x > 0 && reserve_y > 0, INSUFFICIENT_LIQUIDITY);
+        assert!(amount_x > 0, ERR_INSUFFICIENT_AMOUNT);
+        assert!(reserve_x > 0 && reserve_y > 0, ERR_INSUFFICIENT_LIQUIDITY);
         let amount_y = ((amount_x as u128) * (reserve_y as u128) / (reserve_x as u128) as u64);
         amount_y
     }
@@ -34,8 +39,8 @@ module SwapDeployer::AnimeSwapPoolV1Library {
         reserve_out: u64,
         swap_fee: u64
     ): u64 {
-        assert!(amount_in > 0, INSUFFICIENT_INPUT_AMOUNT);
-        assert!(reserve_in > 0 && reserve_out > 0, INSUFFICIENT_LIQUIDITY);
+        assert!(amount_in > 0, ERR_INSUFFICIENT_INPUT_AMOUNT);
+        assert!(reserve_in > 0 && reserve_out > 0, ERR_INSUFFICIENT_LIQUIDITY);
         let amount_in_with_fee = (amount_in as u128) * ((10000 - swap_fee) as u128);
         let numerator = amount_in_with_fee * (reserve_out as u128);
         let denominator = (reserve_in as u128) * 10000 + amount_in_with_fee;
@@ -50,8 +55,8 @@ module SwapDeployer::AnimeSwapPoolV1Library {
         reserve_out: u64,
         swap_fee: u64
     ): u64 {
-        assert!(amount_out > 0, INSUFFICIENT_OUTPUT_AMOUNT);
-        assert!(reserve_in > 0 && reserve_out > 0, INSUFFICIENT_LIQUIDITY);
+        assert!(amount_out > 0, ERR_INSUFFICIENT_OUTPUT_AMOUNT);
+        assert!(reserve_in > 0 && reserve_out > 0, ERR_INSUFFICIENT_LIQUIDITY);
         let numerator = (reserve_in as u128) * (amount_out as u128) * 10000;
         let denominator = ((reserve_out - amount_out) as u128) * ((10000 - swap_fee) as u128);
         let amount_in = numerator / denominator + 1;
@@ -118,7 +123,7 @@ module SwapDeployer::AnimeSwapPoolV1Library {
     public fun compare<CoinType1, CoinType2>(): bool{
         let type_name_coin_1 = type_info::type_name<CoinType1>();
         let type_name_coin_2 = type_info::type_name<CoinType2>();
-        assert!(type_name_coin_1 != type_name_coin_2, COIN_TYPE_SAME_ERROR);
+        assert!(type_name_coin_1 != type_name_coin_2, ERR_COIN_TYPE_SAME_ERROR);
 
         if (string::length(&type_name_coin_1) < string::length(&type_name_coin_2)) return true;
         if (string::length(&type_name_coin_1) > string::length(&type_name_coin_2)) return false;
