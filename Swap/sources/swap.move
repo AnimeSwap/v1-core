@@ -29,14 +29,14 @@ module SwapDeployer::AnimeSwapPoolV1 {
     }
 
     /// global config data
-    struct AdminData has key, drop {
+    struct AdminData has key {
         signer_cap: SignerCapability,
         dao_fee_to: address,
         admin_address: address,
         dao_fee: u8,   // 1/(dao_fee+1) comes to dao_fee_to if dao_fee_on
         swap_fee: u64,  // BP, swap_fee * 1/10000
         dao_fee_on: bool,   // default: true
-        is_pause_flash: bool, // pause flash swap
+        is_pause: bool, // pause swap
     }
 
     struct PairMeta has drop, store, copy {
@@ -155,7 +155,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
             dao_fee: 5,         // 1/6 to dao fee
             swap_fee: 30,       // 0.3%
             dao_fee_on: true,  // default true
-            is_pause_flash: false,    // default false
+            is_pause: false,    // default false
         });
         // init pair info
         move_to(resource_account, PairInfo{
@@ -270,14 +270,14 @@ module SwapDeployer::AnimeSwapPoolV1 {
         assert!(lp.locked == false, ERR_LOCK_ERROR);
     }
 
-    /// assert flash swap paused
+    /// assert swap paused
     fun assert_paused() acquires AdminData {
-        assert!(borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause_flash, ERR_PAUSABLE_ERROR);
+        assert!(borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause, ERR_PAUSABLE_ERROR);
     }
 
-    /// assert flash swap not paused
+    /// assert swap not paused
     fun assert_not_paused() acquires AdminData {
-        assert!(!borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause_flash, ERR_PAUSABLE_ERROR);
+        assert!(!borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause, ERR_PAUSABLE_ERROR);
     }
 
     /// return pair admin account signer
@@ -636,22 +636,26 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin::transfer<LPCoin<X, Y>>(&get_resource_account_signer(), acc_addr, amount);
     }
 
+    /// pause swap, only remove lp is allowed
+    /// EMERGENCY ONLY
     public entry fun pause(
         account: &signer
     ) acquires AdminData {
         assert_not_paused();
         let admin_data = borrow_global_mut<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
         assert!(signer::address_of(account) == admin_data.admin_address, ERR_FORBIDDEN);
-        admin_data.is_pause_flash = true;
+        admin_data.is_pause = true;
     }
 
+    /// unpause swap
+    /// EMERGENCY ONLY
     public entry fun unpause(
         account: &signer
     ) acquires AdminData {
         assert_paused();
         let admin_data = borrow_global_mut<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
         assert!(signer::address_of(account) == admin_data.admin_address, ERR_FORBIDDEN);
-        admin_data.is_pause_flash = false;
+        admin_data.is_pause = false;
     }
 
     /**
@@ -663,6 +667,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     public fun create_pair<X, Y>() acquires AdminData, PairInfo {
         assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
         assert!(!exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_ALREADY_EXIST);
+        assert_not_paused();
         let resource_account_signer = get_resource_account_signer();
         // create lp coin
         let (lp_b, lp_f, lp_m) = coin::initialize<LPCoin<X, Y>>(&resource_account_signer, utf8(b"AnimeSwapLPCoin"), utf8(b"ANILPCoin"), 8, true);
@@ -769,6 +774,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     ): Coin<LPCoin<X, Y>> acquires LiquidityPool, AdminData, Events {
         assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
         assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_NOT_EXIST);
+        assert_not_paused();
         assert_lp_unlocked<X, Y>();
 
         let amount_x = coin::value(&coin_x);
@@ -854,6 +860,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coins_y_in: Coin<Y>,
         amount_y_out: u64,
     ): (Coin<X>, Coin<Y>) acquires LiquidityPool, AdminData, Events {
+        assert_not_paused();
         assert_lp_unlocked<X, Y>();
         let amount_x_in = coin::value(&coins_x_in);
         let amount_y_in = coin::value(&coins_y_in);
@@ -905,7 +912,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
 
     public fun get_admin_data(): (u64, u8, bool, bool) acquires AdminData {
         let admin_data = borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
-        (admin_data.swap_fee, admin_data.dao_fee, admin_data.dao_fee_on, admin_data.is_pause_flash)
+        (admin_data.swap_fee, admin_data.dao_fee, admin_data.dao_fee_on, admin_data.is_pause)
     }
 
     public fun get_pair_list(): vector<PairMeta> acquires PairInfo {
@@ -929,8 +936,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
     ): (Coin<X>, Coin<Y>, FlashSwap<X, Y>) acquires LiquidityPool, AdminData {
         // assert check
         assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
-        assert_not_paused();
         assert!(loan_coin_x > 0 || loan_coin_y > 0, ERR_LOAN_ERROR);
+        assert_not_paused();
         assert_lp_unlocked<X, Y>();
 
         let lp = borrow_global_mut<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
@@ -959,8 +966,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
     ) acquires LiquidityPool, AdminData, Events {
         // assert check
         assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
-        assert_not_paused();
         assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_NOT_EXIST);
+        assert_not_paused();
 
         let FlashSwap { loan_coin_x, loan_coin_y } = flash_swap;
         let amount_x_in = coin::value(&x_in);
@@ -1001,8 +1008,6 @@ module SwapDeployer::AnimeSwapPoolV1 {
     #[test_only]
     use aptos_framework::account::create_account_for_test;
     #[test_only]
-    use SwapDeployer::TestCoinsV1::{Self, BTC, USDT};
-    #[test_only]
     const TEST_ERROR:u64 = 10000;
     #[test_only]
     const ADD_LIQUIDITY_ERROR:u64 = 10003;
@@ -1014,20 +1019,18 @@ module SwapDeployer::AnimeSwapPoolV1 {
     const INIT_FAUCET_COIN:u64 = 1000000000;
 
     #[test_only]
-    struct Aptos has store {}
+    struct Aptos {}
     #[test_only]
-    struct Caps<phantom Aptos> has key {
-        mint: MintCapability<Aptos>,
-        freeze: FreezeCapability<Aptos>,
-        burn: BurnCapability<Aptos>,
-    }
+    struct AptosB {}
     #[test_only]
-    struct AptosB has store {}
+    struct BTC {}
     #[test_only]
-    struct CapsB<phantom AptosB> has key {
-        mint: MintCapability<AptosB>,
-        freeze: FreezeCapability<AptosB>,
-        burn: BurnCapability<AptosB>,
+    struct USDT {}
+    #[test_only]
+    struct Caps<phantom X> has key {
+        mint: MintCapability<X>,
+        freeze: FreezeCapability<X>,
+        burn: BurnCapability<X>,
     }
 
     #[test_only]
@@ -1039,7 +1042,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
             dao_fee: 5,         // 1/6 to dao fee
             swap_fee: 30,       // 0.3%
             dao_fee_on: false,  // default false
-            is_pause_flash: false,    // default false
+            is_pause: false,    // default false
         });
         move_to(resource_account, PairInfo{
             pair_list: vector::empty(),
@@ -1056,16 +1059,30 @@ module SwapDeployer::AnimeSwapPoolV1 {
         create_account_for_test(signer::address_of(creator));
         create_account_for_test(signer::address_of(resource_account));
         create_account_for_test(signer::address_of(someone_else));
-        // init creator
-        TestCoinsV1::initialize(creator);
         init_module_test(resource_account);
-        // init someone_else
-        TestCoinsV1::register_coins_all(someone_else);
-        TestCoinsV1::mint_coin<BTC>(creator, signer::address_of(someone_else), INIT_FAUCET_COIN);
-        TestCoinsV1::mint_coin<USDT>(creator, signer::address_of(someone_else), INIT_FAUCET_COIN);
 
         // init timestamp
         timestamp::update_global_time_for_test(100);
+
+        {
+            // init self-defined BTC
+            let (apt_b, apt_f, apt_m) = coin::initialize<BTC>(creator, utf8(b"Bitcoin"), utf8(b"BTC"), 6, true);
+            coin::register<BTC>(resource_account);
+            coin::register<BTC>(someone_else);
+            let coins = coin::mint<BTC>(INIT_FAUCET_COIN, &apt_m);
+            coin::deposit(signer::address_of(someone_else), coins);
+            move_to(resource_account, Caps<BTC> { mint: apt_m, freeze: apt_f, burn: apt_b });
+        };
+
+        {
+            // init self-defined USDT
+            let (apt_b, apt_f, apt_m) = coin::initialize<USDT>(creator, utf8(b"Tether"), utf8(b"USDT"), 6, true);
+            coin::register<USDT>(resource_account);
+            coin::register<USDT>(someone_else);
+            let coins = coin::mint<USDT>(INIT_FAUCET_COIN, &apt_m);
+            coin::deposit(signer::address_of(someone_else), coins);
+            move_to(resource_account, Caps<USDT> { mint: apt_m, freeze: apt_f, burn: apt_b });
+        };
 
         {
             // init self-defined Aptos
@@ -1084,12 +1101,29 @@ module SwapDeployer::AnimeSwapPoolV1 {
             coin::register<AptosB>(someone_else);
             let coins = coin::mint<AptosB>(INIT_FAUCET_COIN, &apt_m);
             coin::deposit(signer::address_of(someone_else), coins);
-            move_to(resource_account, CapsB<AptosB> { mint: apt_m, freeze: apt_f, burn: apt_b });
+            move_to(resource_account, Caps<AptosB> { mint: apt_m, freeze: apt_f, burn: apt_b });
         };
 
         create_pair<BTC, Aptos>();
         create_pair<USDT, Aptos>();
         create_pair<Aptos, AptosB>();
+    }
+
+    #[test_only]
+    fun test_init_another_one(resource_account: &signer, another_one: &signer) acquires Caps {
+        create_account_for_test(signer::address_of(another_one));
+        {
+            coin::register<BTC>(another_one);
+            let caps = borrow_global<Caps<BTC>>(signer::address_of(resource_account));
+            let coins = coin::mint<BTC>(INIT_FAUCET_COIN, &caps.mint);
+            coin::deposit(signer::address_of(another_one), coins);
+        };
+        {
+            coin::register<USDT>(another_one);
+            let caps = borrow_global<Caps<USDT>>(signer::address_of(resource_account));
+            let coins = coin::mint<USDT>(INIT_FAUCET_COIN, &caps.mint);
+            coin::deposit(signer::address_of(another_one), coins);
+        };
     }
 
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11)]
@@ -1558,13 +1592,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
     // borrow BTC and repay USDT
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
     public entry fun test_flash_swap_a(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
-            acquires LiquidityPool, AdminData, PairInfo, Events {
+            acquires LiquidityPool, AdminData, PairInfo, Caps, Events {
         // init
         test_init(creator, resource_account, someone_else);
-        create_account_for_test(signer::address_of(another_one));
-        TestCoinsV1::register_coins_all(another_one);
-        TestCoinsV1::mint_coin<BTC>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
-        TestCoinsV1::mint_coin<USDT>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
+        test_init_another_one(resource_account, another_one);
 
         // if swap 1000 coin, should be 10000-1000/100000+11145 remain
         add_liquidity_entry<BTC, USDT>(someone_else, 10000, 100000, 1, 1);
@@ -1587,13 +1618,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
     // borrow USDT and repay BTC
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
     public entry fun test_flash_swap_b(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
-            acquires LiquidityPool, AdminData, PairInfo, Events {
+            acquires LiquidityPool, AdminData, PairInfo, Caps, Events {
         // init
         test_init(creator, resource_account, someone_else);
-        create_account_for_test(signer::address_of(another_one));
-        TestCoinsV1::register_coins_all(another_one);
-        TestCoinsV1::mint_coin<BTC>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
-        TestCoinsV1::mint_coin<USDT>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
+        test_init_another_one(resource_account, another_one);
 
         // if swap 1000 coin, should be 10000+102/100000-1000 remain
         add_liquidity_entry<BTC, USDT>(someone_else, 10000, 100000, 1, 1);
@@ -1617,13 +1645,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
     #[expected_failure(abort_code = 112)]
     public entry fun test_flash_swap_error(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
-            acquires LiquidityPool, AdminData, PairInfo, Events {
+            acquires LiquidityPool, AdminData, PairInfo, Caps, Events {
         // init
         test_init(creator, resource_account, someone_else);
-        create_account_for_test(signer::address_of(another_one));
-        TestCoinsV1::register_coins_all(another_one);
-        TestCoinsV1::mint_coin<BTC>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
-        TestCoinsV1::mint_coin<USDT>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
+        test_init_another_one(resource_account, another_one);
 
         // if swap 1000 coin, should be 9000/11115 remain
         add_liquidity_entry<BTC, USDT>(someone_else, 10000, 10000, 1, 1);
@@ -1637,13 +1662,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
     // borrow both boins and repay greater than swap fee
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
     public entry fun test_flash_swap_2(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
-            acquires LiquidityPool, AdminData, PairInfo, Events {
+            acquires LiquidityPool, AdminData, PairInfo, Caps, Events {
         // init
         test_init(creator, resource_account, someone_else);
-        create_account_for_test(signer::address_of(another_one));
-        TestCoinsV1::register_coins_all(another_one);
-        TestCoinsV1::mint_coin<BTC>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
-        TestCoinsV1::mint_coin<USDT>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
+        test_init_another_one(resource_account, another_one);
 
         add_liquidity_entry<BTC, USDT>(someone_else, 10000, 10000, 1, 1);
         let (coin_out_1, coin_out_2, flash_swap) = flash_swap<BTC, USDT>(1000, 1000);
@@ -1664,13 +1686,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
     #[expected_failure(abort_code = 112)]
     public entry fun test_flash_swap_error_2(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
-            acquires LiquidityPool, AdminData, PairInfo, Events {
+            acquires LiquidityPool, AdminData, PairInfo, Caps, Events {
         // init
         test_init(creator, resource_account, someone_else);
-        create_account_for_test(signer::address_of(another_one));
-        TestCoinsV1::register_coins_all(another_one);
-        TestCoinsV1::mint_coin<BTC>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
-        TestCoinsV1::mint_coin<USDT>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
+        test_init_another_one(resource_account, another_one);
 
         add_liquidity_entry<BTC, USDT>(someone_else, 10000, 10000, 1, 1);
         let (coin_out_1, coin_out_2, flash_swap) = flash_swap<BTC, USDT>(1000, 1000);
@@ -1684,13 +1703,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
     // borrow one boin and repay the same coin, greater than swap fee
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
     public entry fun test_flash_swap_3(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
-            acquires LiquidityPool, AdminData, PairInfo, Events {
+            acquires LiquidityPool, AdminData, PairInfo, Caps, Events {
         // init
         test_init(creator, resource_account, someone_else);
-        create_account_for_test(signer::address_of(another_one));
-        TestCoinsV1::register_coins_all(another_one);
-        TestCoinsV1::mint_coin<BTC>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
-        TestCoinsV1::mint_coin<USDT>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
+        test_init_another_one(resource_account, another_one);
 
         add_liquidity_entry<BTC, USDT>(someone_else, 10000, 10000, 1, 1);
         let (coin_out_1, coin_out_2, flash_swap) = flash_swap<BTC, USDT>(1000, 0);
@@ -1710,13 +1726,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
     #[expected_failure(abort_code = 112)]
     public entry fun test_flash_swap_error_3(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
-            acquires LiquidityPool, AdminData, PairInfo, Events {
+            acquires LiquidityPool, AdminData, PairInfo, Caps, Events {
         // init
         test_init(creator, resource_account, someone_else);
-        create_account_for_test(signer::address_of(another_one));
-        TestCoinsV1::register_coins_all(another_one);
-        TestCoinsV1::mint_coin<BTC>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
-        TestCoinsV1::mint_coin<USDT>(creator, signer::address_of(another_one), INIT_FAUCET_COIN);
+        test_init_another_one(resource_account, another_one);
 
         add_liquidity_entry<BTC, USDT>(someone_else, 10000, 10000, 1, 1);
         let (coin_out_1, coin_out_2, flash_swap) = flash_swap<BTC, USDT>(1000, 0);
