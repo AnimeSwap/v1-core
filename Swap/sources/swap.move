@@ -636,6 +636,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin::transfer<LPCoin<X, Y>>(&get_resource_account_signer(), acc_addr, amount);
     }
 
+    /// pause swap, only remove lp is allowed
+    /// EMERGENCY ONLY
     public entry fun pause(
         account: &signer
     ) acquires AdminData {
@@ -645,6 +647,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
         admin_data.is_pause = true;
     }
 
+    /// unpause swap
+    /// EMERGENCY ONLY
     public entry fun unpause(
         account: &signer
     ) acquires AdminData {
