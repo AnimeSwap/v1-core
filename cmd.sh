@@ -80,8 +80,10 @@ aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35
 --args u64:1000 u64:1 u64:1 \
 --type-args 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::TestCoinsV1::BTC 0x1::aptos_coin::AptosCoin
 
-# Admin cmd
+# Admin cmd example
 aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::AnimeSwapPoolV1::set_dao_fee_to \
+--args address:0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c
+aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::AnimeSwapPoolV1::set_admin_address \
 --args address:0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c
 aptos move run --function-id 0x16fe2df00ea7dde4a63409201f7f4e536bde7bb7335526a35d05111e68aa322c::AnimeSwapPoolV1::set_dao_fee \
 --args u64:5
