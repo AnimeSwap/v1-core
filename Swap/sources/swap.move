@@ -36,7 +36,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         dao_fee: u8,   // 1/(dao_fee+1) comes to dao_fee_to if dao_fee_on
         swap_fee: u64,  // BP, swap_fee * 1/10000
         dao_fee_on: bool,   // default: true
-        is_pause_flash: bool, // pause flash swap
+        is_pause: bool, // pause swap
     }
 
     struct PairMeta has drop, store, copy {
@@ -155,7 +155,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
             dao_fee: 5,         // 1/6 to dao fee
             swap_fee: 30,       // 0.3%
             dao_fee_on: true,  // default true
-            is_pause_flash: false,    // default false
+            is_pause: false,    // default false
         });
         // init pair info
         move_to(resource_account, PairInfo{
@@ -270,14 +270,14 @@ module SwapDeployer::AnimeSwapPoolV1 {
         assert!(lp.locked == false, ERR_LOCK_ERROR);
     }
 
-    /// assert flash swap paused
+    /// assert swap paused
     fun assert_paused() acquires AdminData {
-        assert!(borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause_flash, ERR_PAUSABLE_ERROR);
+        assert!(borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause, ERR_PAUSABLE_ERROR);
     }
 
-    /// assert flash swap not paused
+    /// assert swap not paused
     fun assert_not_paused() acquires AdminData {
-        assert!(!borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause_flash, ERR_PAUSABLE_ERROR);
+        assert!(!borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).is_pause, ERR_PAUSABLE_ERROR);
     }
 
     /// return pair admin account signer
@@ -642,7 +642,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         assert_not_paused();
         let admin_data = borrow_global_mut<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
         assert!(signer::address_of(account) == admin_data.admin_address, ERR_FORBIDDEN);
-        admin_data.is_pause_flash = true;
+        admin_data.is_pause = true;
     }
 
     public entry fun unpause(
@@ -651,7 +651,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         assert_paused();
         let admin_data = borrow_global_mut<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
         assert!(signer::address_of(account) == admin_data.admin_address, ERR_FORBIDDEN);
-        admin_data.is_pause_flash = false;
+        admin_data.is_pause = false;
     }
 
     /**
@@ -663,6 +663,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     public fun create_pair<X, Y>() acquires AdminData, PairInfo {
         assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
         assert!(!exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_ALREADY_EXIST);
+        assert_not_paused();
         let resource_account_signer = get_resource_account_signer();
         // create lp coin
         let (lp_b, lp_f, lp_m) = coin::initialize<LPCoin<X, Y>>(&resource_account_signer, utf8(b"AnimeSwapLPCoin"), utf8(b"ANILPCoin"), 8, true);
@@ -769,6 +770,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     ): Coin<LPCoin<X, Y>> acquires LiquidityPool, AdminData, Events {
         assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
         assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_NOT_EXIST);
+        assert_not_paused();
         assert_lp_unlocked<X, Y>();
 
         let amount_x = coin::value(&coin_x);
@@ -854,6 +856,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coins_y_in: Coin<Y>,
         amount_y_out: u64,
     ): (Coin<X>, Coin<Y>) acquires LiquidityPool, AdminData, Events {
+        assert_not_paused();
         assert_lp_unlocked<X, Y>();
         let amount_x_in = coin::value(&coins_x_in);
         let amount_y_in = coin::value(&coins_y_in);
@@ -905,7 +908,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
 
     public fun get_admin_data(): (u64, u8, bool, bool) acquires AdminData {
         let admin_data = borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS);
-        (admin_data.swap_fee, admin_data.dao_fee, admin_data.dao_fee_on, admin_data.is_pause_flash)
+        (admin_data.swap_fee, admin_data.dao_fee, admin_data.dao_fee_on, admin_data.is_pause)
     }
 
     public fun get_pair_list(): vector<PairMeta> acquires PairInfo {
@@ -929,8 +932,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
     ): (Coin<X>, Coin<Y>, FlashSwap<X, Y>) acquires LiquidityPool, AdminData {
         // assert check
         assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
-        assert_not_paused();
         assert!(loan_coin_x > 0 || loan_coin_y > 0, ERR_LOAN_ERROR);
+        assert_not_paused();
         assert_lp_unlocked<X, Y>();
 
         let lp = borrow_global_mut<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
@@ -959,8 +962,8 @@ module SwapDeployer::AnimeSwapPoolV1 {
     ) acquires LiquidityPool, AdminData, Events {
         // assert check
         assert!(AnimeSwapPoolV1Library::compare<X, Y>(), ERR_PAIR_ORDER_ERROR);
-        assert_not_paused();
         assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_NOT_EXIST);
+        assert_not_paused();
 
         let FlashSwap { loan_coin_x, loan_coin_y } = flash_swap;
         let amount_x_in = coin::value(&x_in);
@@ -1035,7 +1038,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
             dao_fee: 5,         // 1/6 to dao fee
             swap_fee: 30,       // 0.3%
             dao_fee_on: false,  // default false
-            is_pause_flash: false,    // default false
+            is_pause: false,    // default false
         });
         move_to(resource_account, PairInfo{
             pair_list: vector::empty(),
