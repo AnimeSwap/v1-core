@@ -147,20 +147,6 @@ module SwapDeployer::AnimeSwapPoolV1Library {
         };
     }
 
-    // register coin if to not registerd and account address equals to address
-    // return bool: whether to address registerd after this func call
-    public fun try_register_coin<CoinType>(
-        account: &signer,
-        to: address
-    ): bool {
-        if (coin::is_account_registered<CoinType>(to)) return true;
-        if (signer::address_of(account) == to) {
-            coin::register<CoinType>(account);
-            return true
-        };
-        false
-    }
-
     #[test_only]
     const TEST_ERROR:u64 = 10000;
     #[test_only]
