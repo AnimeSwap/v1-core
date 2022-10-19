@@ -265,7 +265,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
 
     /// assert lp unlocked
     fun assert_lp_unlocked<X, Y>() acquires LiquidityPool {
-        assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_ALREADY_EXIST);
+        assert!(exists<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS), ERR_PAIR_NOT_EXIST);
         let lp = borrow_global<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
         assert!(lp.locked == false, ERR_LOCK_ERROR);
     }
@@ -892,13 +892,13 @@ module SwapDeployer::AnimeSwapPoolV1 {
      */
 
     /// price oracle for other contract
-    public fun get_last_price_cumulative<X, Y>(): (u128, u128) acquires LiquidityPool {
+    public fun get_last_price_cumulative<X, Y>(): (u128, u128, u64) acquires LiquidityPool {
         if (AnimeSwapPoolV1Library::compare<X, Y>()) {
             let lp = borrow_global<LiquidityPool<X, Y>>(RESOURCE_ACCOUNT_ADDRESS);
-            (lp.last_price_x_cumulative, lp.last_price_y_cumulative)
+            (lp.last_price_x_cumulative, lp.last_price_y_cumulative, lp.last_block_timestamp)
         } else {
             let lp = borrow_global<LiquidityPool<Y, X>>(RESOURCE_ACCOUNT_ADDRESS);
-            (lp.last_price_y_cumulative, lp.last_price_x_cumulative)
+            (lp.last_price_y_cumulative, lp.last_price_x_cumulative, lp.last_block_timestamp)
         }
     }
 
