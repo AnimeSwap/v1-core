@@ -30,13 +30,22 @@ Swap example:
 ```move
 use SwapDeployer::AnimeSwapPoolV1;
 ...
+// swap `amount_in` X to Y
+let amount_in = 100000;
+let coins_in = coin::withdraw(&account, amount_in);
+let coins_out = AnimeSwapPoolV1::swap_coins_for_coins<X, Y>(coins_in);
+```
+
+```move
+use SwapDeployer::AnimeSwapPoolV1;
+...
 // swap X to `amount_out` Y
 let amount_out = 100000;
-let amount_in = AnimeSwapPoolV1::get_amounts_in_1_pair<X, Y>(amount);
+let amount_in = AnimeSwapPoolV1::get_amounts_in_1_pair<X, Y>(amount_out);
 // check if `amount_in` meets your demand
 let coins_in = coin::withdraw(&account, amount_in);
 let coins_out = AnimeSwapPoolV1::swap_coins_for_coins<X, Y>(coins_in);
-assert!(coin::value(&coins_out) == amount_out, 2);
+assert!(coin::value(&coins_out) == amount_out, 1);
 ```
 
 Flash swap example:
