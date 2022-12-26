@@ -1434,7 +1434,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
 
     // test remove more than expected
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11)]
-    #[expected_failure(abort_code = 65542)]
+    #[expected_failure(abort_code = 65542, location = coin)]
     public entry fun test_add_remove_liquidity_error_1(creator: &signer, resource_account: &signer, someone_else: &signer) 
             acquires LiquidityPool, AdminData, PairInfo, Events {
         // init
@@ -1449,7 +1449,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
 
     // test remove more than expected
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11)]
-    #[expected_failure(abort_code = 109)]
+    #[expected_failure(abort_code = ERR_INSUFFICIENT_Y_AMOUNT)]
     public entry fun test_add_remove_liquidity_error_2(creator: &signer, resource_account: &signer, someone_else: &signer) 
             acquires LiquidityPool, AdminData, PairInfo, Events {
         // init
@@ -1643,7 +1643,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     // ERR_K_ERROR, not enough coin repay
     // borrow on boin and repay the other coin but less equal than swap fee
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
-    #[expected_failure(abort_code = 112)]
+    #[expected_failure(abort_code = ERR_K_ERROR)]
     public entry fun test_flash_swap_error(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
             acquires LiquidityPool, AdminData, PairInfo, Caps, Events {
         // init
@@ -1684,7 +1684,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     // ERR_K_ERROR, not enough coin repay
     // borrow both boins and repay less equal than swap fee
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
-    #[expected_failure(abort_code = 112)]
+    #[expected_failure(abort_code = ERR_K_ERROR)]
     public entry fun test_flash_swap_error_2(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
             acquires LiquidityPool, AdminData, PairInfo, Caps, Events {
         // init
@@ -1724,7 +1724,7 @@ module SwapDeployer::AnimeSwapPoolV1 {
     // ERR_K_ERROR, not enough coin repay
     // borrow one boin and repay the same coin, but less equal than swap fee
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
-    #[expected_failure(abort_code = 112)]
+    #[expected_failure(abort_code = ERR_K_ERROR)]
     public entry fun test_flash_swap_error_3(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
             acquires LiquidityPool, AdminData, PairInfo, Caps, Events {
         // init
@@ -1737,5 +1737,23 @@ module SwapDeployer::AnimeSwapPoolV1 {
         coin::deposit<USDT>(signer::address_of(another_one), coin_out_2);
         let repay_coin_x = coin::withdraw<BTC>(another_one, 1003);
         pay_flash_swap<BTC, USDT>(repay_coin_x, coin::zero<USDT>(), flash_swap);
+    }
+
+    #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11, another_one = @0x12)]
+    public entry fun test_tmp(creator: &signer, resource_account: &signer, someone_else: &signer, another_one : &signer)
+            acquires LiquidityPool, AdminData, PairInfo, Caps, Events {
+        // init
+        test_init(creator, resource_account, someone_else);
+        test_init_another_one(resource_account, another_one);
+
+        // if swap 1000 coin, should be 10000-1000/100000+11145 remain
+        add_liquidity_entry<BTC, USDT>(someone_else, 10000, 100000, 1, 1);
+        let amount_out = 1000;
+        let amount_in = get_amounts_in_1_pair<USDT, BTC>(amount_out);
+        assert!(amount_in == 11145, TEST_ERROR);
+        let coins_in = coin::withdraw<USDT>(another_one, amount_in);
+        let coins_out = swap_coins_for_coins<USDT, BTC>(coins_in);
+        assert!(coin::value(&coins_out) >= amount_out, TEST_ERROR);
+        coin::deposit<BTC>(signer::address_of(another_one), coins_out)
     }
 }
