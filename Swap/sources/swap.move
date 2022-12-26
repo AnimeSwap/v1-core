@@ -230,9 +230,9 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_out: u64
     ): u64 acquires LiquidityPool, AdminData {
         let swap_fee = borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).swap_fee;
-        let (reserve_in, reserve_out) = get_reserves_size<X, Y>();
+        let (reserve_in, reserve_out) = get_reserves_size<Y, Z>();
         let amount_mid = AnimeSwapPoolV1Library::get_amount_in(amount_out, reserve_in, reserve_out, swap_fee);
-        (reserve_in, reserve_out) = get_reserves_size<Y, Z>();
+        (reserve_in, reserve_out) = get_reserves_size<X, Y>();
         let amount_in = AnimeSwapPoolV1Library::get_amount_in(amount_mid, reserve_in, reserve_out, swap_fee);
         amount_in
     }
@@ -242,11 +242,11 @@ module SwapDeployer::AnimeSwapPoolV1 {
         amount_out: u64
     ): u64 acquires LiquidityPool, AdminData {
         let swap_fee = borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).swap_fee;
-        let (reserve_in, reserve_out) = get_reserves_size<X, Y>();
+        let (reserve_in, reserve_out) = get_reserves_size<Z, W>();
         let amount_mid = AnimeSwapPoolV1Library::get_amount_in(amount_out, reserve_in, reserve_out, swap_fee);
         (reserve_in, reserve_out) = get_reserves_size<Y, Z>();
         let amount_mid = AnimeSwapPoolV1Library::get_amount_in(amount_mid, reserve_in, reserve_out, swap_fee);
-        (reserve_in, reserve_out) = get_reserves_size<Z, W>();
+        (reserve_in, reserve_out) = get_reserves_size<X, Y>();
         let amount_in = AnimeSwapPoolV1Library::get_amount_in(amount_mid, reserve_in, reserve_out, swap_fee);
         amount_in
     }
@@ -1404,6 +1404,29 @@ module SwapDeployer::AnimeSwapPoolV1 {
     }
 
     #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11)]
+    public entry fun test_swap_multiple_pair_2_1_1(creator: &signer, resource_account: &signer, someone_else: &signer)
+            acquires LiquidityPool, AdminData, PairInfo, Events {
+        // init
+        test_init(creator, resource_account, someone_else);
+
+        add_liquidity_entry<BTC, USDT>(someone_else, 100000000, 1000000, 1, 1);
+        add_liquidity_entry<USDT, Aptos>(someone_else, 1000000, 1000000, 1, 1);
+
+        swap_coins_for_exact_coins_2_pair_entry<BTC, USDT, Aptos>(someone_else, 10000, 100000000000000);
+        {
+            let lp = borrow_global<LiquidityPool<BTC, USDT>>(RESOURCE_ACCOUNT_ADDRESS);
+            let lp_2 = borrow_global<LiquidityPool<USDT, Aptos>>(RESOURCE_ACCOUNT_ADDRESS);
+            assert!(coin::value(&lp.coin_x_reserve) == 101026651, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::value(&lp.coin_y_reserve) == 989868, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::value(&lp_2.coin_x_reserve) == 1010132, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::value(&lp_2.coin_y_reserve) == 990000, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::balance<BTC>(signer::address_of(someone_else)) == INIT_FAUCET_COIN - 100000000 - 1026651, USER_LP_BALANCE_ERROR);
+            assert!(coin::balance<USDT>(signer::address_of(someone_else)) == INIT_FAUCET_COIN - 2000000, USER_LP_BALANCE_ERROR);
+            assert!(coin::balance<Aptos>(signer::address_of(someone_else)) == INIT_FAUCET_COIN - 1000000 + 10000, USER_LP_BALANCE_ERROR);
+        }
+    }
+
+    #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11)]
     public entry fun test_swap_multiple_pair_2_2(creator: &signer, resource_account: &signer, someone_else: &signer)
             acquires LiquidityPool, AdminData, PairInfo, Events {
         // init
@@ -1429,6 +1452,34 @@ module SwapDeployer::AnimeSwapPoolV1 {
             assert!(coin::balance<USDT>(signer::address_of(someone_else)) == INIT_FAUCET_COIN - 20000000, USER_LP_BALANCE_ERROR);
             assert!(coin::balance<Aptos>(signer::address_of(someone_else)) == INIT_FAUCET_COIN - 20000000, USER_LP_BALANCE_ERROR);
             assert!(coin::balance<AptosB>(signer::address_of(someone_else)) == INIT_FAUCET_COIN - 10000000 + 10000, USER_LP_BALANCE_ERROR);
+        };
+    }
+
+    #[test(creator = @SwapDeployer, resource_account = @ResourceAccountDeployer, someone_else = @0x11)]
+    public entry fun test_swap_multiple_pair_2_2_1(creator: &signer, resource_account: &signer, someone_else: &signer)
+            acquires LiquidityPool, AdminData, PairInfo, Events {
+        // init
+        test_init(creator, resource_account, someone_else);
+
+        add_liquidity_entry<BTC, USDT>(someone_else, 10000000, 1000000, 1, 1);
+        add_liquidity_entry<USDT, Aptos>(someone_else, 1000000, 100000, 1, 1);
+        add_liquidity_entry<Aptos, AptosB>(someone_else, 100000, 100000, 1, 1);
+
+        swap_coins_for_exact_coins_3_pair_entry<BTC, USDT, Aptos, AptosB>(someone_else, 1000, 100000000000000);
+        {
+            let lp = borrow_global<LiquidityPool<BTC, USDT>>(RESOURCE_ACCOUNT_ADDRESS);
+            let lp_2 = borrow_global<LiquidityPool<USDT, Aptos>>(RESOURCE_ACCOUNT_ADDRESS);
+            let lp_3 = borrow_global<LiquidityPool<Aptos, AptosB>>(RESOURCE_ACCOUNT_ADDRESS);
+            assert!(coin::value(&lp.coin_x_reserve) == 10104130, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::value(&lp.coin_y_reserve) == 989725, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::value(&lp_2.coin_x_reserve) == 1010275, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::value(&lp_2.coin_y_reserve) == 98986, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::value(&lp_3.coin_x_reserve) == 101014, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::value(&lp_3.coin_y_reserve) == 99000, CONTRACTOR_BALANCE_ERROR);
+            assert!(coin::balance<BTC>(signer::address_of(someone_else)) == INIT_FAUCET_COIN - 10000000 - 104130, USER_LP_BALANCE_ERROR);
+            assert!(coin::balance<USDT>(signer::address_of(someone_else)) == INIT_FAUCET_COIN - 2000000, USER_LP_BALANCE_ERROR);
+            assert!(coin::balance<Aptos>(signer::address_of(someone_else)) == INIT_FAUCET_COIN - 200000, USER_LP_BALANCE_ERROR);
+            assert!(coin::balance<AptosB>(signer::address_of(someone_else)) == INIT_FAUCET_COIN - 100000 + 1000, USER_LP_BALANCE_ERROR);
         };
     }
 
