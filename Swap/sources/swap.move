@@ -608,6 +608,10 @@ module SwapDeployer::AnimeSwapPoolV1 {
             admin_data.dao_fee = dao_fee;
         };
     }
+    
+    public fun get_swap_fee() : u64 {
+        borrow_global<AdminData>(RESOURCE_ACCOUNT_ADDRESS).swap_fee
+    }
 
     public entry fun set_swap_fee(
         account: &signer,
