@@ -2,7 +2,7 @@
 
 **AnimeSwap** is AMM protocol for [Aptos](https://www.aptos.com/) blockchain. 
 
-* [Contracts documents](https://docs.animeswap.org/docs/contracts)
+* [Contracts documents](https://docs.animeswap.org/docs/contracts/Aptos/contracts)
 * [SDK](https://github.com/AnimeSwap/v1-sdk)
 
 The current repository contains: 
